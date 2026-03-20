@@ -90,7 +90,7 @@ python -m langgraph_study.main --show-mermaid
 
 ### 3.5 配置 `qwen3-max`
 
-当前项目通过 LangChain 官方 Qwen 集成访问真实模型。按官方文档，需要设置 `DASHSCOPE_API_KEY` 环境变量。
+当前项目通过 `ChatTongyi` 访问 DashScope / Qwen 模型。需要设置 `DASHSCOPE_API_KEY` 环境变量。
 
 如果你使用 Conda：
 
@@ -105,6 +105,7 @@ conda activate langgraph
 - 默认模型名已经是 `qwen3-max`
 - 如果不设置 `QWEN_MODEL`，代码也会默认使用 `qwen3-max`
 - 如果没有 `DASHSCOPE_API_KEY`，程序会回退到本地答案，不会直接崩溃
+- 当前实现采用的是你现有项目同样使用的 Tongyi 接法，更利于复用已有经验
 
 ### 3.6 运行测试
 

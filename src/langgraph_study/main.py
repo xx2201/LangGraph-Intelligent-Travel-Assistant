@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 
-from .config import DEFAULT_BACKGROUND, DEFAULT_INPUT
-from .graph import build_graph
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from langgraph_study.config import DEFAULT_BACKGROUND, DEFAULT_INPUT
+    from langgraph_study.graph import build_graph
+else:
+    from .config import DEFAULT_BACKGROUND, DEFAULT_INPUT
+    from .graph import build_graph
 
 
 def parse_args() -> argparse.Namespace:
