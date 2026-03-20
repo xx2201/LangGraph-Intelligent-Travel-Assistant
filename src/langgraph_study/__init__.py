@@ -1,0 +1,2 @@
+"""Minimal LangGraph study project."""
+
