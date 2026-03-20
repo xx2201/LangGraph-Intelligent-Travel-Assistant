@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Literal
-
 from langgraph.graph import END, START, StateGraph
 
 from .nodes import (
@@ -11,19 +9,19 @@ from .nodes import (
     explain_overview,
     explain_state,
     finalize,
+    normalize_input,
 )
-from .state import LearningState
+from .state import LearningState, Route
 
 
-def route_topic(
-    state: LearningState,
-) -> Literal["overview", "state", "control_flow", "memory"]:
-    return state["route"]  # type: ignore[return-value]
+def route_topic(state: LearningState) -> Route:
+    return state["route"]
 
 
 def build_graph():
     builder = StateGraph(LearningState)
 
+    builder.add_node("normalize_input", normalize_input)
     builder.add_node("analyze_topic", analyze_topic)
     builder.add_node("overview", explain_overview)
     builder.add_node("state", explain_state)
@@ -31,7 +29,8 @@ def build_graph():
     builder.add_node("memory", explain_memory)
     builder.add_node("finalize", finalize)
 
-    builder.add_edge(START, "analyze_topic")
+    builder.add_edge(START, "normalize_input")
+    builder.add_edge("normalize_input", "analyze_topic")
     builder.add_conditional_edges(
         "analyze_topic",
         route_topic,
@@ -51,3 +50,5 @@ def build_graph():
 
     return builder.compile()
 
+
+graph = build_graph()

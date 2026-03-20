@@ -1,6 +1,24 @@
 from __future__ import annotations
 
+from .config import DEFAULT_BACKGROUND, DEFAULT_INPUT
+from .llm import generate_answer_for_route
 from .state import LearningState
+
+
+def normalize_input(state: LearningState) -> LearningState:
+    raw_input = (state.get("input") or state.get("topic") or "").strip()
+    topic = raw_input or DEFAULT_INPUT
+    background = (state.get("background") or DEFAULT_BACKGROUND).strip()
+
+    return {
+        "input": raw_input or topic,
+        "topic": topic,
+        "background": background,
+        "notes": [
+            f"输入主题: {topic}",
+            f"学习者背景: {background}",
+        ],
+    }
 
 
 def analyze_topic(state: LearningState) -> LearningState:
@@ -19,60 +37,63 @@ def analyze_topic(state: LearningState) -> LearningState:
         "route": route,
         "notes": [
             f"主题已识别为: {route}",
-            f"已有背景: {state.get('background', '未提供')}",
         ],
     }
 
 
-def explain_overview(_: LearningState) -> LearningState:
-    return {
-        "answer": (
-            "LangGraph 的核心不是提示词，而是显式状态机。"
-            "你需要先理解状态如何在节点之间流动，再去理解 agent。"
-        ),
-        "next_step": "继续学习 StateGraph、节点返回值和 compile() 的关系。",
-        "notes": ["进入 overview 节点。"],
-    }
+def explain_overview(state: LearningState) -> LearningState:
+    response = generate_answer_for_route(state, "overview")
+    notes = [
+        "进入 overview 节点。",
+        f"回答来源: {response['response_source']}",
+    ]
+    if response.get("response_error"):
+        notes.append(f"模型调用信息: {response['response_error']}")
+    response["notes"] = notes
+    return response
 
 
-def explain_state(_: LearningState) -> LearningState:
-    return {
-        "answer": (
-            "State 是 LangGraph 的中心。每个节点读取共享状态，并返回部分更新。"
-            "图执行的本质是状态在节点之间逐步演化。"
-        ),
-        "next_step": "下一步建议观察 reducer，例如 Annotated[list[str], operator.add]。",
-        "notes": ["进入 state 节点。"],
-    }
+def explain_state(state: LearningState) -> LearningState:
+    response = generate_answer_for_route(state, "state")
+    notes = [
+        "进入 state 节点。",
+        f"回答来源: {response['response_source']}",
+    ]
+    if response.get("response_error"):
+        notes.append(f"模型调用信息: {response['response_error']}")
+    response["notes"] = notes
+    return response
 
 
-def explain_control_flow(_: LearningState) -> LearningState:
-    return {
-        "answer": (
-            "Conditional Edge 用于把图从固定链路提升为显式分支控制。"
-            "这也是 LangGraph 相对普通链式调用更重要的差异之一。"
-        ),
-        "next_step": "下一步建议学习 add_conditional_edges() 的返回路由机制。",
-        "notes": ["进入 control_flow 节点。"],
-    }
+def explain_control_flow(state: LearningState) -> LearningState:
+    response = generate_answer_for_route(state, "control_flow")
+    notes = [
+        "进入 control_flow 节点。",
+        f"回答来源: {response['response_source']}",
+    ]
+    if response.get("response_error"):
+        notes.append(f"模型调用信息: {response['response_error']}")
+    response["notes"] = notes
+    return response
 
 
-def explain_memory(_: LearningState) -> LearningState:
-    return {
-        "answer": (
-            "Memory 在 LangGraph 里更准确地说是 checkpointing 和持久状态恢复。"
-            "它不是简单聊天记录，而是运行图的可恢复执行上下文。"
-        ),
-        "next_step": "下一步建议学习 checkpointer 与 thread/session 的关系。",
-        "notes": ["进入 memory 节点。"],
-    }
+def explain_memory(state: LearningState) -> LearningState:
+    response = generate_answer_for_route(state, "memory")
+    notes = [
+        "进入 memory 节点。",
+        f"回答来源: {response['response_source']}",
+    ]
+    if response.get("response_error"):
+        notes.append(f"模型调用信息: {response['response_error']}")
+    response["notes"] = notes
+    return response
 
 
 def finalize(state: LearningState) -> LearningState:
     return {
         "notes": [
             "图执行结束。",
+            f"实际回答来源: {state.get('response_source', 'unknown')}",
             f"建议下一步: {state['next_step']}",
         ]
     }
-

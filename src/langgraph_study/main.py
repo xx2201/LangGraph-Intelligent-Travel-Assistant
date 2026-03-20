@@ -2,20 +2,28 @@ from __future__ import annotations
 
 import argparse
 
+from .config import DEFAULT_BACKGROUND, DEFAULT_INPUT
 from .graph import build_graph
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the minimal LangGraph study demo.")
     parser.add_argument(
+        "--input",
+        help="Natural language learning request to feed into the graph.",
+    )
+    parser.add_argument(
         "--topic",
-        default="我想先理解 LangGraph 的 state",
-        help="Learning topic to route through the graph.",
+        help="Backward-compatible alias of --input.",
     )
     parser.add_argument(
         "--background",
-        default="已学习过 LangChain",
         help="Current background information.",
+    )
+    parser.add_argument(
+        "--no-prompt",
+        action="store_true",
+        help="Run without interactive prompts and fall back to defaults.",
     )
     parser.add_argument(
         "--show-mermaid",
@@ -23,6 +31,40 @@ def parse_args() -> argparse.Namespace:
         help="Print the Mermaid definition of the compiled graph.",
     )
     return parser.parse_args()
+
+
+def build_initial_state(
+    args: argparse.Namespace,
+    prompt=input,
+) -> dict[str, object]:
+    user_input = (args.input or args.topic or "").strip()
+    background = (args.background or "").strip()
+
+    if not user_input:
+        if args.no_prompt:
+            user_input = DEFAULT_INPUT
+        else:
+            user_input = prompt(
+                f"请输入你当前想学习的问题或主题（回车使用默认值：{DEFAULT_INPUT}）："
+            ).strip()
+            if not user_input:
+                user_input = DEFAULT_INPUT
+
+    if not background:
+        if args.no_prompt:
+            background = DEFAULT_BACKGROUND
+        else:
+            background = prompt(
+                f"请输入你的背景（回车使用默认值：{DEFAULT_BACKGROUND}）："
+            ).strip()
+            if not background:
+                background = DEFAULT_BACKGROUND
+
+    return {
+        "input": user_input,
+        "background": background,
+        "notes": [],
+    }
 
 
 def main() -> None:
@@ -33,17 +75,19 @@ def main() -> None:
         print(graph.get_graph().draw_mermaid())
         print()
 
-    result = graph.invoke(
-        {
-            "topic": args.topic,
-            "background": args.background,
-            "notes": [],
-        }
-    )
+    initial_state = build_initial_state(args)
+    result = graph.invoke(initial_state)
 
     print("=== Topic ===")
     print(result["topic"])
     print()
+    print("=== Source ===")
+    print(result["response_source"])
+    print()
+    if result.get("response_error"):
+        print("=== Model Error ===")
+        print(result["response_error"])
+        print()
     print("=== Route ===")
     print(result["route"])
     print()
@@ -60,4 +104,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

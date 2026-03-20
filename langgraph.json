@@ -1,0 +1,9 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "study_graph": "langgraph_study.graph:graph"
+  },
+  "python_version": "3.11"
+}
