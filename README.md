@@ -184,6 +184,33 @@ Studio 中建议直接提交：
 }
 ```
 
+### 3.9 运行高德 MCP 服务
+
+当前项目额外提供了一个基于高德 Web 服务 API 的 MCP Server，适合给后续 Agent 或 MCP 客户端使用。
+
+先设置环境变量：
+
+```powershell
+conda env config vars set AMAP_API_KEY="你的高德 Web 服务 Key" -n langgraph
+conda deactivate
+conda activate langgraph
+```
+
+然后启动服务：
+
+```powershell
+python -m langgraph_study.amap_mcp_server
+```
+
+默认会以 `streamable-http` 方式启动 MCP 服务。
+
+当前提供的工具：
+
+- `geocode`
+- `reverse_geocode`
+- `weather`
+- `input_tips`
+
 ## 4. 代码入口说明
 
 ### `src/langgraph_study/state.py`
@@ -211,6 +238,10 @@ Studio 中建议直接提交：
 - 如何接入 `qwen3-max`
 - 如何通过环境变量启用真实模型
 - 没有 API Key 时如何回退到本地教学答案
+
+### `src/langgraph_study/amap_mcp_server.py`
+
+提供一个独立的 MCP 服务，把高德地图 Web API 封装成标准工具，便于后续给 Agent 使用。
 
 ### `src/langgraph_study/graph.py`
 
