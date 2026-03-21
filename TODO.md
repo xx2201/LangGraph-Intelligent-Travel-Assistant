@@ -6,6 +6,7 @@
 - [x] 接入 `qwen3-max`
 - [x] 接入高德 MCP 工具
 - [x] 实现 `assistant -> tools -> assistant` Agent loop
+- [x] 增加参数澄清与地点消歧层
 - [x] 提供多轮终端对话入口
 - [x] 终端入口改为异步执行，兼容 MCP 异步工具
 - [x] 提供独立高德 MCP 服务

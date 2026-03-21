@@ -7,6 +7,7 @@
 - 使用 `MessagesState` 维护多轮对话
 - 使用 `qwen3-max` 作为决策模型
 - 使用高德 MCP 工具提供天气、地理编码、逆地理编码和地点提示能力
+- 在进入模型前增加参数澄清与地点消歧层
 - 使用 LangGraph 的 `assistant -> tools -> assistant` 循环完成工具调用
 
 ## 1. 项目结构
@@ -39,10 +40,12 @@ langgraph/
 主图是一个真正的 Agent loop：
 
 1. 用户输入旅行问题
-2. `assistant` 节点调用 `qwen3-max`
-3. 如果模型判断需要工具，就调用高德 MCP 工具
-4. 工具结果回到 `assistant`
-5. 模型整理结果并输出最终回答
+2. `analyze_query` 节点先抽取意图、地点和时间线索
+3. 如果地点不清晰，`clarify` 节点先向用户追问
+4. 如果信息足够，`assistant` 节点调用 `qwen3-max`
+5. 模型判断需要工具时，调用高德 MCP 工具
+6. 工具结果回到 `assistant`
+7. 模型整理结果并输出最终回答
 
 这比之前的“固定路由图”更接近真实 Agent。
 
@@ -142,9 +145,11 @@ python -m langgraph_study.amap_mcp_server --transport streamable-http
 
 定义 Agent 图结构：
 
+- `analyze_query` 节点
+- `clarify` 节点
 - `assistant` 节点
 - `tools` 节点
-- `assistant -> tools -> assistant` 循环
+- `analyze_query -> clarify/assistant -> tools -> assistant` 流程
 
 ### `src/langgraph_study/nodes.py`
 

@@ -59,6 +59,15 @@ def extract_last_ai_text(messages) -> str:
     return ""
 
 
+def print_console_text(text: str) -> None:
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        sanitized = text.encode(encoding, errors="replace").decode(encoding)
+        print(sanitized)
+
+
 async def invoke_agent(graph, messages):
     return await graph.ainvoke({"messages": messages})
 
@@ -90,7 +99,7 @@ def main() -> None:
         messages = result["messages"]
 
         print("=== Assistant ===")
-        print(extract_last_ai_text(messages))
+        print_console_text(extract_last_ai_text(messages))
         print()
 
         if one_shot:
