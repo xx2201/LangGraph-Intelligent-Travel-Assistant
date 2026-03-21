@@ -4,12 +4,14 @@ const newThreadBtn = document.getElementById("newThreadBtn");
 const messageInput = document.getElementById("messageInput");
 const chatHistory = document.getElementById("chatHistory");
 const sessionList = document.getElementById("sessionList");
+const processTimeline = document.getElementById("processTimeline");
 
 const ACTIVE_THREAD_KEY = "langgraph-active-thread-id";
 
 let threads = [];
 let activeThreadId = localStorage.getItem(ACTIVE_THREAD_KEY) || "";
 let activeMessages = [];
+let activeProcessEvents = [];
 
 function setActiveThreadId(threadId) {
   activeThreadId = threadId;
@@ -24,13 +26,49 @@ function updateThreadDisplay(threadId) {
   threadIdEl.textContent = threadId || "not-created";
 }
 
+function resetProcessTimeline(message = "发送一条消息后，这里会动态出现本轮 Agent 执行步骤。") {
+  activeProcessEvents = [];
+  renderProcessTimeline(message);
+}
+
+function formatProcessStatus(status) {
+  if (status === "running") {
+    return "running";
+  }
+  if (status === "done") {
+    return "done";
+  }
+  return "info";
+}
+
+function upsertProcessEvent(event) {
+  const nextEvent = {
+    key: event.key,
+    title: event.title,
+    detail: event.detail,
+    stage: event.stage,
+    status: formatProcessStatus(event.status),
+  };
+
+  const index = activeProcessEvents.findIndex((item) => item.key === event.key);
+  if (index >= 0) {
+    activeProcessEvents = activeProcessEvents.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...nextEvent } : item,
+    );
+  } else {
+    activeProcessEvents = [...activeProcessEvents, nextEvent];
+  }
+
+  renderProcessTimeline();
+}
+
 function renderSessionList() {
   sessionList.innerHTML = "";
 
   if (!threads.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "后端还没有会话。点击“新建会话”开始。";
+    empty.textContent = "后端会话中心里还没有任何线程。先点击“新建会话”开始。";
     sessionList.appendChild(empty);
     return;
   }
@@ -68,7 +106,7 @@ function renderChatHistory() {
   if (!activeThreadId) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "请选择左侧会话，或先新建一个会话。";
+    empty.textContent = "请选择左侧会话，或先创建一个新会话。";
     chatHistory.appendChild(empty);
     return;
   }
@@ -99,9 +137,52 @@ function renderChatHistory() {
   chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
+function renderProcessTimeline(emptyText = "发送一条消息后，这里会动态出现本轮 Agent 执行步骤。") {
+  processTimeline.innerHTML = "";
+
+  if (!activeProcessEvents.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = emptyText;
+    processTimeline.appendChild(empty);
+    return;
+  }
+
+  const rail = document.createElement("div");
+  rail.className = "timeline-rail";
+
+  activeProcessEvents.forEach((event) => {
+    const article = document.createElement("article");
+    article.className = `timeline-step ${event.status}`;
+
+    const head = document.createElement("div");
+    head.className = "timeline-step-head";
+
+    const title = document.createElement("h3");
+    title.className = "timeline-title";
+    title.textContent = event.title;
+
+    const badge = document.createElement("span");
+    badge.className = "timeline-badge";
+    badge.textContent = event.status;
+
+    const detail = document.createElement("p");
+    detail.className = "timeline-detail";
+    detail.textContent = event.detail;
+
+    head.append(title, badge);
+    article.append(head, detail);
+    rail.appendChild(article);
+  });
+
+  processTimeline.appendChild(rail);
+  processTimeline.scrollTop = processTimeline.scrollHeight;
+}
+
 function renderApp() {
   renderSessionList();
   renderChatHistory();
+  renderProcessTimeline();
 }
 
 async function fetchJson(url, options = {}) {
@@ -122,6 +203,7 @@ async function loadThreads() {
   if (!threads.length) {
     setActiveThreadId("");
     activeMessages = [];
+    resetProcessTimeline();
     renderApp();
     return;
   }
@@ -135,6 +217,7 @@ async function selectThread(threadId, rerenderList = true) {
   const detail = await fetchJson(`/api/threads/${threadId}`);
   setActiveThreadId(detail.thread.thread_id);
   activeMessages = detail.messages;
+  resetProcessTimeline("切换会话后，这里会显示下一轮对话的动态执行过程。");
   if (rerenderList) {
     await refreshThreads();
   }
@@ -146,17 +229,18 @@ async function createThread() {
   await refreshThreads();
   setActiveThreadId(thread.thread_id);
   activeMessages = [];
+  resetProcessTimeline("新会话已创建。发送一条消息后，这里会显示 Agent 动态过程。");
   renderApp();
 }
 
 function appendUserMessage(content) {
   activeMessages = [...activeMessages, { role: "user", content }];
-  renderApp();
+  renderChatHistory();
 }
 
 function appendAssistantPlaceholder() {
   activeMessages = [...activeMessages, { role: "assistant", content: "" }];
-  renderApp();
+  renderChatHistory();
 }
 
 function appendAssistantDelta(content) {
@@ -169,7 +253,7 @@ function appendAssistantDelta(content) {
     }
     return { ...message, content: `${message.content}${content}` };
   });
-  renderApp();
+  renderChatHistory();
 }
 
 async function consumeNdjsonStream(response, onEvent) {
@@ -212,6 +296,7 @@ async function sendMessage() {
 
   const currentThreadId = activeThreadId;
   appendUserMessage(userMessage);
+  resetProcessTimeline("Agent 已接收问题，正在启动本轮执行。");
   messageInput.value = "";
   sendBtn.disabled = true;
 
@@ -234,6 +319,9 @@ async function sendMessage() {
         setActiveThreadId(event.thread_id);
         updateThreadDisplay(event.thread_id);
       }
+      if (event.type === "process") {
+        upsertProcessEvent(event);
+      }
       if (event.type === "assistant_start") {
         appendAssistantPlaceholder();
       }
@@ -247,15 +335,30 @@ async function sendMessage() {
       }
     });
   } catch (error) {
-    appendAssistantDelta(`请求失败：${error}`);
+    upsertProcessEvent({
+      key: "graph_error",
+      stage: "graph",
+      status: "done",
+      title: "本轮失败",
+      detail: `请求失败: ${error}`,
+    });
+    appendAssistantDelta(`请求失败: ${error}`);
   } finally {
     sendBtn.disabled = false;
+    messageInput.focus();
   }
 }
+
+messageInput.addEventListener("keydown", async (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    await sendMessage();
+  }
+});
 
 sendBtn.addEventListener("click", sendMessage);
 newThreadBtn.addEventListener("click", createThread);
 
 loadThreads().catch((error) => {
-  chatHistory.innerHTML = `<div class="empty-state">初始化失败：${error}</div>`;
+  chatHistory.innerHTML = `<div class="empty-state">初始化失败: ${error}</div>`;
 });

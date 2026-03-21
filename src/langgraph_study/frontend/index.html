@@ -7,43 +7,78 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <main class="page">
-    <aside class="sidebar">
+  <main class="page-shell">
+    <aside class="sidebar-shell">
       <section class="panel session-panel">
-        <header class="hero compact">
-          <p class="eyebrow">LangGraph Study Project</p>
+        <header class="panel-head compact">
+          <p class="eyebrow">LangGraph Study</p>
           <h1>会话列表</h1>
-          <p class="summary">前端会保存每个会话的标题、thread_id 和本地消息历史。点击左侧不同会话即可继续聊天。</p>
+          <p class="panel-copy">
+            左侧是后端会话中心管理的历史线程。切换不同线程后，LangGraph 会继续使用对应的
+            <code>thread_id</code> 恢复上下文。
+          </p>
         </header>
-        <button id="newThreadBtn" class="button secondary full-width" type="button">新建会话</button>
+
+        <button id="newThreadBtn" class="button button-secondary full-width" type="button">
+          新建会话
+        </button>
+
         <div id="sessionList" class="session-list"></div>
       </section>
     </aside>
 
-    <section class="panel chat-panel">
-      <header class="hero">
-        <p class="eyebrow">Travel Assistant</p>
-        <h1>对话窗口</h1>
-        <p class="summary">后端仍然是同一个 LangGraph 运行时图。真正决定会话续接的是 thread_id，不是前端列表本身。</p>
-      </header>
+    <section class="main-shell">
+      <section class="panel workspace-panel">
+        <header class="panel-head">
+          <div>
+            <p class="eyebrow">Travel Assistant</p>
+            <h1>动态 Agent 对话台</h1>
+            <p class="panel-copy">
+              用户消息会立即进入聊天区。右侧时间线会动态显示
+              <code>analyze_query</code>、<code>assistant</code>、<code>tools</code>
+              等执行过程。
+            </p>
+          </div>
+          <div class="thread-card">
+            <span class="thread-label">Current thread_id</span>
+            <code id="threadId">not-created</code>
+          </div>
+        </header>
 
-      <section class="toolbar">
-        <div class="thread-box">
-          <span class="thread-label">Current thread_id</span>
-          <code id="threadId">not-created</code>
-        </div>
-      </section>
+        <section class="workspace-grid">
+          <section class="conversation-panel">
+            <div id="chatHistory" class="chat-history">
+              <div class="empty-state">请选择左侧会话，或先创建一个新会话。</div>
+            </div>
 
-      <section class="chat-column">
-        <section class="chat-history" id="chatHistory">
-          <div class="empty-state" id="emptyState">请选择左侧会话，或先新建一个会话。</div>
-        </section>
+            <label class="composer-label" for="messageInput">你的问题</label>
+            <div class="composer-box">
+              <textarea
+                id="messageInput"
+                placeholder="例如：帮我做一个去成都的旅游规划"
+              ></textarea>
+              <div class="composer-actions">
+                <p class="composer-hint">按 Enter 发送，Shift + Enter 换行。</p>
+                <button id="sendBtn" class="button button-primary" type="button">发送</button>
+              </div>
+            </div>
+          </section>
 
-        <label class="label" for="messageInput">你的问题</label>
-        <textarea id="messageInput" placeholder="例如：帮我做一个去成都的旅游规划"></textarea>
+          <aside class="timeline-panel">
+            <header class="timeline-head">
+              <p class="eyebrow">Live Graph</p>
+              <h2>Agent 时间线</h2>
+              <p class="panel-copy">
+                这里不会展示难看的原始 state，而是展示本轮真正发生的节点、路由和工具调用过程。
+              </p>
+            </header>
 
-        <section class="actions">
-          <button id="sendBtn" class="button primary" type="button">发送</button>
+            <div id="processTimeline" class="timeline-list">
+              <div class="empty-state">
+                发送一条消息后，这里会动态出现本轮 Agent 执行步骤。
+              </div>
+            </div>
+          </aside>
         </section>
       </section>
     </section>

@@ -4,7 +4,7 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
@@ -150,6 +150,181 @@ def extract_stream_text(chunk) -> str:
     return str(content) if content else ""
 
 
+def summarize_value(value: Any, limit: int = 96) -> str:
+    """Convert nested event payloads into short human-readable timeline text."""
+
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        text = value
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False)
+        except TypeError:
+            text = str(value)
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit - 1]}..."
+
+
+def summarize_query_context(query_context: dict[str, Any]) -> str:
+    """Turn structured query context into a compact one-line explanation."""
+
+    parts: list[str] = []
+    intent = query_context.get("intent")
+    if intent:
+        parts.append(f"意图: {intent}")
+    city = query_context.get("normalized_city") or query_context.get("location_text")
+    if city:
+        parts.append(f"地点: {city}")
+    time_text = query_context.get("time_text")
+    if time_text:
+        parts.append(f"时间: {time_text}")
+    if query_context.get("needs_clarification"):
+        reason = query_context.get("clarification_reason") or "信息不足"
+        parts.append(f"需澄清: {reason}")
+    return " | ".join(parts) if parts else "已完成查询预分析。"
+
+
+def build_process_updates(event: dict[str, Any], tracker: dict[str, Any]) -> list[dict[str, Any]]:
+    """Map LangGraph runtime events to a compact UI timeline model."""
+
+    event_type = event.get("event")
+    name = event.get("name")
+    data = event.get("data", {})
+    run_id = event.get("run_id", "")
+    updates: list[dict[str, Any]] = []
+
+    if event_type == "on_chain_start" and name == "analyze_query":
+        updates.append(
+            {
+                "type": "process",
+                "key": "analyze_query",
+                "stage": "analysis",
+                "status": "running",
+                "title": "分析用户输入",
+                "detail": "提取意图、地点和时间线索。",
+            }
+        )
+    elif event_type == "on_chain_end" and name == "analyze_query":
+        query_context = data.get("output", {}).get("query_context", {})
+        updates.append(
+            {
+                "type": "process",
+                "key": "analyze_query",
+                "stage": "analysis",
+                "status": "done",
+                "title": "分析完成",
+                "detail": summarize_query_context(query_context),
+            }
+        )
+    elif event_type == "on_chain_end" and name == "route_after_analysis":
+        route = data.get("output", "")
+        detail = "信息不足，先进入澄清节点。" if route == "clarify" else "信息足够，进入助手节点。"
+        updates.append(
+            {
+                "type": "process",
+                "key": "route_after_analysis",
+                "stage": "route",
+                "status": "done",
+                "title": "选择下一步",
+                "detail": detail,
+            }
+        )
+    elif event_type == "on_chain_start" and name == "clarify":
+        updates.append(
+            {
+                "type": "process",
+                "key": "clarify",
+                "stage": "clarify",
+                "status": "running",
+                "title": "请求澄清",
+                "detail": "当前信息不足，正在生成追问。",
+            }
+        )
+    elif event_type == "on_chain_end" and name == "clarify":
+        updates.append(
+            {
+                "type": "process",
+                "key": "clarify",
+                "stage": "clarify",
+                "status": "done",
+                "title": "澄清完成",
+                "detail": "已生成追问，等待用户补充信息。",
+            }
+        )
+    elif event_type == "on_chat_model_start":
+        tracker["assistant_round"] += 1
+        assistant_key = f"assistant_{tracker['assistant_round']}"
+        tracker["current_assistant_key"] = assistant_key
+        updates.append(
+            {
+                "type": "process",
+                "key": assistant_key,
+                "stage": "assistant",
+                "status": "running",
+                "title": f"助手回合 {tracker['assistant_round']}",
+                "detail": "模型正在生成下一步决策或回答。",
+            }
+        )
+    elif event_type == "on_chat_model_end":
+        assistant_key = tracker.get("current_assistant_key", "assistant_1")
+        updates.append(
+            {
+                "type": "process",
+                "key": assistant_key,
+                "stage": "assistant",
+                "status": "done",
+                "title": f"助手回合 {tracker.get('assistant_round', 1)}",
+                "detail": "模型本轮输出完成，可能包含工具调用或最终回答。",
+            }
+        )
+    elif event_type == "on_tool_start":
+        tracker["tool_round"] += 1
+        tool_key = f"tool_{tracker['tool_round']}"
+        tracker["tool_runs"][run_id] = tool_key
+        tool_input = summarize_value(data.get("input"))
+        detail = f"输入: {tool_input}" if tool_input else "正在调用外部工具。"
+        updates.append(
+            {
+                "type": "process",
+                "key": tool_key,
+                "stage": "tool",
+                "status": "running",
+                "title": f"调用工具: {name}",
+                "detail": detail,
+            }
+        )
+    elif event_type == "on_tool_end":
+        tool_key = tracker["tool_runs"].pop(run_id, f"tool_{tracker['tool_round']}")
+        tool_output = summarize_value(data.get("output"))
+        detail = f"输出: {tool_output}" if tool_output else "工具调用完成。"
+        updates.append(
+            {
+                "type": "process",
+                "key": tool_key,
+                "stage": "tool",
+                "status": "done",
+                "title": f"工具完成: {name}",
+                "detail": detail,
+            }
+        )
+    elif event_type == "on_chain_end" and name == "LangGraph":
+        updates.append(
+            {
+                "type": "process",
+                "key": "graph_complete",
+                "stage": "graph",
+                "status": "done",
+                "title": "本轮完成",
+                "detail": "Agent 已完成本轮图执行。",
+            }
+        )
+
+    return updates
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Create and clean up the persistent graph and thread metadata store."""
@@ -240,12 +415,31 @@ def create_app() -> FastAPI:
             yield ndjson_line({"type": "thread", "thread_id": thread_id})
             yielded_text = False
             started_assistant = False
+            process_tracker = {
+                "assistant_round": 0,
+                "current_assistant_key": "",
+                "tool_round": 0,
+                "tool_runs": {},
+            }
+            yield ndjson_line(
+                {
+                    "type": "process",
+                    "key": "graph_start",
+                    "stage": "graph",
+                    "status": "running",
+                    "title": "收到新请求",
+                    "detail": "LangGraph 正在启动本轮执行。",
+                }
+            )
 
             async for event in app.state.graph.astream_events(
                 {"messages": [HumanMessage(content=request.message)]},
                 config=make_graph_config(thread_id),
                 version="v2",
             ):
+                for process_update in build_process_updates(event, process_tracker):
+                    yield ndjson_line(process_update)
+
                 if event.get("event") != "on_chat_model_stream":
                     continue
                 chunk = event.get("data", {}).get("chunk")
