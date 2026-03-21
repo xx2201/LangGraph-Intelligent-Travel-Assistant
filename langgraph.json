@@ -3,7 +3,7 @@
     "."
   ],
   "graphs": {
-    "travel_assistant": "langgraph_study.graph:build_graph"
+    "travel_assistant": "langgraph_study.assistant.graph:build_graph"
   },
   "python_version": "3.11"
 }

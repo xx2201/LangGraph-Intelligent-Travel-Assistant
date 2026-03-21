@@ -5,7 +5,7 @@ from functools import lru_cache
 
 from langchain_community.chat_models.tongyi import ChatTongyi
 
-from ..config import DEFAULT_QWEN_MODEL
+from ..core.config import DEFAULT_QWEN_MODEL
 
 
 def has_qwen_api_key() -> bool:

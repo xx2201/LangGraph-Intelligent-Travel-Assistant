@@ -1,7 +1,7 @@
 import os
 
-from langgraph_study.config import AMAP_MCP_MODULE
-from langgraph_study.mcp_tools import build_amap_server_config
+from langgraph_study.core.config import AMAP_MCP_MODULE
+from langgraph_study.integrations.mcp_tools import build_amap_server_config
 
 
 def test_build_amap_server_config_includes_parent_env(monkeypatch) -> None:

@@ -3,7 +3,7 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 import pytest
 
-from langgraph_study.graph import build_graph, build_persistent_graph
+from langgraph_study.assistant.graph import build_graph, build_persistent_graph
 
 
 def make_config(thread_id: str) -> dict:
@@ -131,20 +131,26 @@ async def test_persistent_graph_restores_context_across_graph_instances(tmp_path
         tools=[],
         db_path=str(db_path),
     )
-    first = await first_graph.ainvoke(
-        {"messages": [HumanMessage(content="北京天气怎么样？")]},
-        config=config,
-    )
+    try:
+        first = await first_graph.ainvoke(
+            {"messages": [HumanMessage(content="北京天气怎么样？")]},
+            config=config,
+        )
 
-    second_graph = await build_persistent_graph(
-        model=HistoryModel(),
-        tools=[],
-        db_path=str(db_path),
-    )
-    second = await second_graph.ainvoke(
-        {"messages": [HumanMessage(content="那上海呢？")]},
-        config=config,
-    )
+        second_graph = await build_persistent_graph(
+            model=HistoryModel(),
+            tools=[],
+            db_path=str(db_path),
+        )
+        try:
+            second = await second_graph.ainvoke(
+                {"messages": [HumanMessage(content="那上海呢？")]},
+                config=config,
+            )
+        finally:
+            await second_graph.checkpointer.conn.close()
+    finally:
+        await first_graph.checkpointer.conn.close()
 
     assert first["messages"][-1].content == "human_count=1"
     assert second["messages"][-1].content == "human_count=2"

@@ -3,7 +3,7 @@ from argparse import Namespace
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from langgraph_study.main import (
+from langgraph_study.app.cli import (
     DEFAULT_USER_INPUT,
     extract_last_ai_text,
     get_user_input,

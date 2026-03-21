@@ -7,7 +7,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from ..config import CHECKPOINT_DB_PATH
+from ..core.config import CHECKPOINT_DB_PATH
 from ..integrations.llm import get_qwen_model
 from ..integrations.mcp_tools import get_amap_tools, load_amap_tools
 from .nodes import analyze_query, clarify_query, create_assistant_node, route_after_analysis

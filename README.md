@@ -18,7 +18,6 @@ langgraph/
 ├─ src/
 │  └─ langgraph_study/
 │     ├─ __init__.py
-│     ├─ amap_mcp_server.py
 │     ├─ app/
 │     │  ├─ __init__.py
 │     │  └─ cli.py
@@ -27,20 +26,16 @@ langgraph/
 │     │  ├─ graph.py
 │     │  ├─ nodes.py
 │     │  └─ state.py
-│     ├─ config.py
-│     ├─ graph.py
+│     ├─ core/
+│     │  ├─ __init__.py
+│     │  └─ config.py
 │     ├─ integrations/
 │     │  ├─ __init__.py
 │     │  ├─ llm.py
 │     │  └─ mcp_tools.py
-│     ├─ llm.py
-│     ├─ main.py
 │     ├─ mcp/
 │     │  ├─ __init__.py
 │     │  └─ amap_server.py
-│     ├─ mcp_tools.py
-│     ├─ nodes.py
-│     └─ state.py
 ├─ tests/
 │  ├─ test_amap_mcp_server.py
 │  ├─ test_graph.py
@@ -101,7 +96,7 @@ conda activate langgraph
 ### 4.1 启动旅行助手
 
 ```powershell
-python -m langgraph_study.main
+python -m langgraph_study.app.cli
 ```
 
 启动后可以多轮提问，例如：
@@ -113,14 +108,14 @@ python -m langgraph_study.main
 如果只想单次执行：
 
 ```powershell
-python -m langgraph_study.main --input "北京今天天气怎么样？"
+python -m langgraph_study.app.cli --input "北京今天天气怎么样？"
 ```
 
 如果你希望在不同命令之间继续同一段对话，显式传同一个 `thread_id`：
 
 ```powershell
-python -m langgraph_study.main --thread-id trip-demo --input "北京今天天气怎么样？"
-python -m langgraph_study.main --thread-id trip-demo --input "那上海呢？"
+python -m langgraph_study.app.cli --thread-id trip-demo --input "北京今天天气怎么样？"
+python -m langgraph_study.app.cli --thread-id trip-demo --input "那上海呢？"
 ```
 
 说明：
@@ -132,7 +127,7 @@ python -m langgraph_study.main --thread-id trip-demo --input "那上海呢？"
 ### 4.2 查看图结构
 
 ```powershell
-python -m langgraph_study.main --show-mermaid --no-prompt
+python -m langgraph_study.app.cli --show-mermaid --no-prompt
 ```
 
 ### 4.3 使用 LangGraph Studio
@@ -159,7 +154,7 @@ Studio 中可以直接提交：
 如果你想把高德工具单独暴露给别的客户端：
 
 ```powershell
-python -m langgraph_study.amap_mcp_server --transport streamable-http
+python -m langgraph_study.mcp.amap_server --transport streamable-http
 ```
 
 当前提供的 MCP 工具：

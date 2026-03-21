@@ -1,3 +1,1 @@
-from .amap_server import mcp
-
-__all__ = ["mcp"]
+"""MCP service package for travel assistant integrations."""

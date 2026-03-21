@@ -8,7 +8,7 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage, HumanMessage
 
 from ..assistant.graph import build_persistent_graph
-from ..config import DEFAULT_USER_INPUT
+from ..core.config import DEFAULT_USER_INPUT
 
 
 def parse_args() -> argparse.Namespace:

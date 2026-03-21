@@ -7,7 +7,7 @@ from functools import lru_cache
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
-from ..config import AMAP_MCP_MODULE
+from ..core.config import AMAP_MCP_MODULE
 
 
 def build_amap_server_config() -> dict:

@@ -1,5 +1,5 @@
 """LangGraph travel assistant study project."""
 
-from .graph import build_graph
+from .assistant.graph import build_graph, build_persistent_graph
 
-__all__ = ["build_graph"]
+__all__ = ["build_graph", "build_persistent_graph"]

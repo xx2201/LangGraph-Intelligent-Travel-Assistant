@@ -12,6 +12,7 @@
 - [x] 接入 `checkpointer + thread_id`
 - [x] 支持跨图实例恢复多轮上下文
 - [x] 重构为分层目录结构
+- [x] 移除根层兼容文件，只保留分层目录实现
 - [x] 提供独立高德 MCP 服务
 - [x] 支持 LangGraph Studio 调试
 

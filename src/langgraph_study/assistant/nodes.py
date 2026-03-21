@@ -5,7 +5,7 @@ from typing import Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from ..config import TRAVEL_AGENT_SYSTEM_PROMPT
+from ..core.config import TRAVEL_AGENT_SYSTEM_PROMPT
 from .state import QueryContext, TravelAssistantState
 
 WEATHER_KEYWORDS = ("天气", "气温", "温度", "下雨", "下雪", "冷不冷", "热不热", "适合出门")
