@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, message_chunk_to_message
+from langchain_core.runnables import RunnableLambda
 
 from ..core.config import TRAVEL_AGENT_SYSTEM_PROMPT
 from .state import QueryContext, TravelAssistantState
@@ -78,20 +79,73 @@ POI_HINTS = (
 def create_assistant_node(bound_model):
     """Create the graph node that calls the LLM with the current state."""
 
+    def build_messages(state: TravelAssistantState):
+        context_message = build_query_context_message(state.get("query_context", {}))
+        return [
+            SystemMessage(content=TRAVEL_AGENT_SYSTEM_PROMPT),
+            SystemMessage(content=context_message),
+            *state["messages"],
+        ]
+
     def assistant(state: TravelAssistantState):
         """Return one AI message produced from prompts, context, and history."""
 
-        context_message = build_query_context_message(state.get("query_context", {}))
-        response = bound_model.invoke(
-            [
-                SystemMessage(content=TRAVEL_AGENT_SYSTEM_PROMPT),
-                SystemMessage(content=context_message),
-                *state["messages"],
-            ]
-        )
+        response = run_bound_model_sync(bound_model, build_messages(state))
         return {"messages": [response]}
 
-    return assistant
+    async def assistant_async(state: TravelAssistantState):
+        """Async version of the assistant node that preserves model stream events."""
+
+        response = await run_bound_model(bound_model, build_messages(state))
+        return {"messages": [response]}
+
+    return RunnableLambda(assistant, afunc=assistant_async, name="assistant")
+
+
+async def run_bound_model(bound_model, messages) -> AIMessage:
+    """Run the bound chat model with streaming support when available.
+
+    The node first tries to consume ``astream()`` so LangGraph can expose model stream
+    events to outer callers such as the web frontend. If streaming is not available,
+    it falls back to ``ainvoke()`` and then to ``invoke()``.
+    """
+
+    if hasattr(bound_model, "astream"):
+        accumulated_chunk = None
+        async for chunk in bound_model.astream(messages):
+            if accumulated_chunk is None:
+                accumulated_chunk = chunk
+            else:
+                accumulated_chunk = accumulated_chunk + chunk
+        if accumulated_chunk is not None:
+            final_message = message_chunk_to_message(accumulated_chunk)
+            if isinstance(final_message, AIMessage):
+                return final_message
+
+    if hasattr(bound_model, "ainvoke"):
+        response = await bound_model.ainvoke(messages)
+        if isinstance(response, AIMessage):
+            return response
+
+    return bound_model.invoke(messages)
+
+
+def run_bound_model_sync(bound_model, messages) -> AIMessage:
+    """Synchronous companion to ``run_bound_model`` for ``graph.invoke()`` callers."""
+
+    if hasattr(bound_model, "stream"):
+        accumulated_chunk = None
+        for chunk in bound_model.stream(messages):
+            if accumulated_chunk is None:
+                accumulated_chunk = chunk
+            else:
+                accumulated_chunk = accumulated_chunk + chunk
+        if accumulated_chunk is not None:
+            final_message = message_chunk_to_message(accumulated_chunk)
+            if isinstance(final_message, AIMessage):
+                return final_message
+
+    return bound_model.invoke(messages)
 
 
 def analyze_query(state: TravelAssistantState) -> dict[str, QueryContext]:

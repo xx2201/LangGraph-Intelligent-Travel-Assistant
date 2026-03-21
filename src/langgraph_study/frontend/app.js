@@ -4,26 +4,12 @@ const newThreadBtn = document.getElementById("newThreadBtn");
 const messageInput = document.getElementById("messageInput");
 const chatHistory = document.getElementById("chatHistory");
 const sessionList = document.getElementById("sessionList");
-const stateMessageCount = document.getElementById("stateMessageCount");
-const stateUserCount = document.getElementById("stateUserCount");
-const stateAssistantCount = document.getElementById("stateAssistantCount");
-const stateToolCallCount = document.getElementById("stateToolCallCount");
-const stateRouteHint = document.getElementById("stateRouteHint");
-const stateQueryContext = document.getElementById("stateQueryContext");
 
 const ACTIVE_THREAD_KEY = "langgraph-active-thread-id";
 
 let threads = [];
 let activeThreadId = localStorage.getItem(ACTIVE_THREAD_KEY) || "";
 let activeMessages = [];
-let activeState = {
-  query_context: {},
-  message_count: 0,
-  user_message_count: 0,
-  assistant_message_count: 0,
-  tool_call_count: 0,
-  next_route_hint: "assistant",
-};
 
 function setActiveThreadId(threadId) {
   activeThreadId = threadId;
@@ -36,15 +22,6 @@ function setActiveThreadId(threadId) {
 
 function updateThreadDisplay(threadId) {
   threadIdEl.textContent = threadId || "not-created";
-}
-
-function renderStatePanel() {
-  stateMessageCount.textContent = String(activeState.message_count || 0);
-  stateUserCount.textContent = String(activeState.user_message_count || 0);
-  stateAssistantCount.textContent = String(activeState.assistant_message_count || 0);
-  stateToolCallCount.textContent = String(activeState.tool_call_count || 0);
-  stateRouteHint.textContent = activeState.next_route_hint || "assistant";
-  stateQueryContext.textContent = JSON.stringify(activeState.query_context || {}, null, 2);
 }
 
 function renderSessionList() {
@@ -125,7 +102,6 @@ function renderChatHistory() {
 function renderApp() {
   renderSessionList();
   renderChatHistory();
-  renderStatePanel();
 }
 
 async function fetchJson(url, options = {}) {
@@ -159,7 +135,6 @@ async function selectThread(threadId, rerenderList = true) {
   const detail = await fetchJson(`/api/threads/${threadId}`);
   setActiveThreadId(detail.thread.thread_id);
   activeMessages = detail.messages;
-  activeState = detail.state;
   if (rerenderList) {
     await refreshThreads();
   }
@@ -171,48 +146,28 @@ async function createThread() {
   await refreshThreads();
   setActiveThreadId(thread.thread_id);
   activeMessages = [];
-  activeState = {
-    query_context: {},
-    message_count: 0,
-    user_message_count: 0,
-    assistant_message_count: 0,
-    tool_call_count: 0,
-    next_route_hint: "assistant",
-  };
   renderApp();
 }
 
-function appendOptimisticUserMessage(content) {
+function appendUserMessage(content) {
   activeMessages = [...activeMessages, { role: "user", content }];
-  activeState = {
-    ...activeState,
-    message_count: (activeState.message_count || 0) + 1,
-    user_message_count: (activeState.user_message_count || 0) + 1,
-  };
   renderApp();
 }
 
-function startAssistantMessage() {
+function appendAssistantPlaceholder() {
   activeMessages = [...activeMessages, { role: "assistant", content: "" }];
   renderApp();
 }
 
 function appendAssistantDelta(content) {
-  if (!activeMessages.length) {
-    startAssistantMessage();
-  }
-  const lastMessage = activeMessages[activeMessages.length - 1];
-  if (!lastMessage || lastMessage.role !== "assistant") {
-    startAssistantMessage();
+  if (!activeMessages.length || activeMessages[activeMessages.length - 1].role !== "assistant") {
+    appendAssistantPlaceholder();
   }
   activeMessages = activeMessages.map((message, index) => {
     if (index !== activeMessages.length - 1) {
       return message;
     }
-    return {
-      ...message,
-      content: `${message.content}${content}`,
-    };
+    return { ...message, content: `${message.content}${content}` };
   });
   renderApp();
 }
@@ -255,8 +210,8 @@ async function sendMessage() {
     await createThread();
   }
 
-  const sentThreadId = activeThreadId;
-  appendOptimisticUserMessage(userMessage);
+  const currentThreadId = activeThreadId;
+  appendUserMessage(userMessage);
   messageInput.value = "";
   sendBtn.disabled = true;
 
@@ -266,7 +221,7 @@ async function sendMessage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: userMessage,
-        thread_id: sentThreadId,
+        thread_id: currentThreadId,
       }),
     });
 
@@ -280,7 +235,7 @@ async function sendMessage() {
         updateThreadDisplay(event.thread_id);
       }
       if (event.type === "assistant_start") {
-        startAssistantMessage();
+        appendAssistantPlaceholder();
       }
       if (event.type === "assistant_delta") {
         appendAssistantDelta(event.content);
@@ -288,7 +243,6 @@ async function sendMessage() {
       if (event.type === "done") {
         await refreshThreads();
         activeMessages = event.messages;
-        activeState = event.state;
         renderApp();
       }
     });

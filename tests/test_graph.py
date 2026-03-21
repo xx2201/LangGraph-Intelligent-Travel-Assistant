@@ -1,4 +1,4 @@
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 import pytest
@@ -8,6 +8,7 @@ from langgraph_study.assistant.graph import (
     build_graph_with_checkpointer,
     build_persistent_graph,
 )
+from langgraph_study.assistant.nodes import run_bound_model
 
 
 def make_config(thread_id: str) -> dict:
@@ -66,6 +67,16 @@ class HistoryModel:
     def invoke(self, messages):
         human_count = sum(isinstance(message, HumanMessage) for message in messages)
         return AIMessage(content=f"human_count={human_count}")
+
+
+class StreamingHistoryModel:
+    def bind_tools(self, tools):
+        self.tools = tools
+        return self
+
+    async def astream(self, messages, config=None, **kwargs):
+        yield AIMessageChunk(content="hello ")
+        yield AIMessageChunk(content="world")
 
 
 def test_studio_graph_builds_without_real_mcp_tools(monkeypatch) -> None:
@@ -189,3 +200,13 @@ async def test_persistent_graph_restores_context_across_graph_instances(tmp_path
 
     assert first["messages"][-1].content == "human_count=1"
     assert second["messages"][-1].content == "human_count=2"
+
+
+@pytest.mark.anyio
+async def test_run_bound_model_prefers_astream_and_merges_chunks() -> None:
+    model = StreamingHistoryModel()
+
+    result = await run_bound_model(model, [HumanMessage(content="hi")])
+
+    assert isinstance(result, AIMessage)
+    assert result.content == "hello world"
