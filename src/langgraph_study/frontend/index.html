@@ -8,14 +8,23 @@
 </head>
 <body>
   <main class="page">
-    <section class="panel">
+    <aside class="sidebar">
+      <section class="panel session-panel">
+        <header class="hero compact">
+          <p class="eyebrow">LangGraph Study Project</p>
+          <h1>会话列表</h1>
+          <p class="summary">前端会保存每个会话的标题、thread_id 和本地消息历史。点击左侧不同会话即可继续聊天。</p>
+        </header>
+        <button id="newThreadBtn" class="button secondary full-width" type="button">新建会话</button>
+        <div id="sessionList" class="session-list"></div>
+      </section>
+    </aside>
+
+    <section class="panel chat-panel">
       <header class="hero">
-        <p class="eyebrow">LangGraph Study Project</p>
-        <h1>Travel Assistant</h1>
-        <p class="summary">
-          This frontend is intentionally small. Its job is only to collect user input,
-          show the current thread id, and call the backend API.
-        </p>
+        <p class="eyebrow">Travel Assistant</p>
+        <h1>对话窗口</h1>
+        <p class="summary">后端仍然是同一个 LangGraph 运行时图。真正决定会话续接的是 thread_id，不是前端列表本身。</p>
       </header>
 
       <section class="toolbar">
@@ -23,19 +32,17 @@
           <span class="thread-label">Current thread_id</span>
           <code id="threadId">not-created</code>
         </div>
-        <button id="newThreadBtn" class="button secondary" type="button">New Thread</button>
       </section>
 
-      <label class="label" for="messageInput">Your question</label>
+      <section class="chat-history" id="chatHistory">
+        <div class="empty-state" id="emptyState">请选择左侧会话，或先新建一个会话。</div>
+      </section>
+
+      <label class="label" for="messageInput">你的问题</label>
       <textarea id="messageInput" placeholder="例如：帮我做一个去成都的旅游规划"></textarea>
 
       <section class="actions">
-        <button id="sendBtn" class="button primary" type="button">Send</button>
-      </section>
-
-      <section class="output-box">
-        <h2>Assistant Reply</h2>
-        <pre id="outputBox">Waiting for input...</pre>
+        <button id="sendBtn" class="button primary" type="button">发送</button>
       </section>
     </section>
   </main>

@@ -7,5 +7,8 @@ def test_frontend_index_contains_expected_assets() -> None:
     script = (frontend_dir / "app.js").read_text(encoding="utf-8")
 
     assert "Travel Assistant" in html
+    assert "sessionList" in html
+    assert "chatHistory" in html
     assert "/static/app.js" in html
     assert "/api/chat" in script
+    assert "/api/threads" in script
