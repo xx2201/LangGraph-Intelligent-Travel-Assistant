@@ -9,6 +9,7 @@ def test_frontend_index_contains_expected_assets() -> None:
     assert "Travel Assistant" in html
     assert "sessionList" in html
     assert "chatHistory" in html
+    assert "stateQueryContext" in html
     assert "/static/app.js" in html
-    assert "/api/chat" in script
+    assert "/api/chat/stream" in script
     assert "/api/threads" in script

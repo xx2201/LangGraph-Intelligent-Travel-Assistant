@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
@@ -27,14 +30,14 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 
 class ChatRequest(BaseModel):
-    """Request body for one chat turn from the browser frontend."""
+    """Request body for one full chat turn."""
 
     message: str
     thread_id: str | None = None
 
 
 class ChatResponse(BaseModel):
-    """Response body returned after one chat turn completes."""
+    """Response body returned after one full chat turn completes."""
 
     thread_id: str
     reply: str
@@ -58,11 +61,23 @@ class MessageView(BaseModel):
     content: str
 
 
+class ThreadStateView(BaseModel):
+    """Small state summary shown in the thread detail panel."""
+
+    query_context: dict
+    message_count: int
+    user_message_count: int
+    assistant_message_count: int
+    tool_call_count: int
+    next_route_hint: str
+
+
 class ThreadDetail(BaseModel):
-    """Thread metadata together with restored message history."""
+    """Thread metadata together with restored message history and state summary."""
 
     thread: ThreadSummary
     messages: list[MessageView]
+    state: ThreadStateView
 
 
 def get_frontend_dir() -> Path:
@@ -78,11 +93,7 @@ def summarize_thread_record(record) -> ThreadSummary:
 
 
 def message_to_view(message: BaseMessage) -> MessageView | None:
-    """Convert LangGraph messages into a frontend-friendly form.
-
-    Tool messages and empty assistant tool-call stubs are filtered out because the
-    frontend thread window is meant to show the user-facing conversation only.
-    """
+    """Convert LangGraph messages into a frontend-friendly form."""
 
     if isinstance(message, HumanMessage):
         content = message.content if isinstance(message.content, str) else str(message.content)
@@ -97,17 +108,61 @@ def message_to_view(message: BaseMessage) -> MessageView | None:
     return None
 
 
-async def load_thread_messages(graph, thread_id: str) -> list[MessageView]:
-    """Read one thread's current message history from the LangGraph checkpoint store."""
+def chunk_text(text: str, chunk_size: int = 24) -> list[str]:
+    """Split the final assistant reply into small chunks for UI streaming."""
 
-    snapshot = await graph.aget_state(make_graph_config(thread_id))
-    messages = snapshot.values.get("messages", [])
-    serialized: list[MessageView] = []
-    for message in messages:
+    if not text:
+        return [""]
+    return [text[index : index + chunk_size] for index in range(0, len(text), chunk_size)]
+
+
+def build_state_view(snapshot_values: dict) -> ThreadStateView:
+    """Summarize the current LangGraph state for the frontend debug panel."""
+
+    messages = snapshot_values.get("messages", [])
+    query_context = snapshot_values.get("query_context", {})
+    user_message_count = sum(isinstance(message, HumanMessage) for message in messages)
+    assistant_message_count = sum(
+        isinstance(message, AIMessage) and bool(getattr(message, "content", ""))
+        for message in messages
+    )
+    tool_call_count = sum(
+        len(message.tool_calls)
+        for message in messages
+        if isinstance(message, AIMessage) and getattr(message, "tool_calls", None)
+    )
+    next_route_hint = "clarify" if query_context.get("needs_clarification") else "assistant"
+    return ThreadStateView(
+        query_context=query_context,
+        message_count=len(messages),
+        user_message_count=user_message_count,
+        assistant_message_count=assistant_message_count,
+        tool_call_count=tool_call_count,
+        next_route_hint=next_route_hint,
+    )
+
+
+async def load_thread_detail_data(graph, thread_record) -> ThreadDetail:
+    """Read one thread's state snapshot and convert it to a frontend-friendly payload."""
+
+    snapshot = await graph.aget_state(make_graph_config(thread_record.thread_id))
+    values = snapshot.values
+    serialized_messages: list[MessageView] = []
+    for message in values.get("messages", []):
         converted = message_to_view(message)
         if converted is not None:
-            serialized.append(converted)
-    return serialized
+            serialized_messages.append(converted)
+    return ThreadDetail(
+        thread=summarize_thread_record(thread_record),
+        messages=serialized_messages,
+        state=build_state_view(values),
+    )
+
+
+def ndjson_line(payload: dict) -> bytes:
+    """Encode one streaming event as newline-delimited JSON."""
+
+    return (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
 
 
 @asynccontextmanager
@@ -156,13 +211,12 @@ def create_app() -> FastAPI:
 
     @app.get("/api/threads/{thread_id}", response_model=ThreadDetail)
     async def get_thread_detail(thread_id: str) -> ThreadDetail:
-        """Return metadata and restored message history for a specific thread."""
+        """Return metadata, restored messages, and state visualization for a thread."""
 
         record = await get_thread(app.state.thread_store, thread_id)
         if record is None:
             raise HTTPException(status_code=404, detail="thread not found")
-        messages = await load_thread_messages(app.state.graph, thread_id)
-        return ThreadDetail(thread=summarize_thread_record(record), messages=messages)
+        return await load_thread_detail_data(app.state.graph, record)
 
     @app.post("/api/chat", response_model=ChatResponse)
     async def chat(request: ChatRequest) -> ChatResponse:
@@ -182,5 +236,48 @@ def create_app() -> FastAPI:
             assistant_message=reply,
         )
         return ChatResponse(thread_id=thread_id, reply=reply)
+
+    @app.post("/api/chat/stream")
+    async def chat_stream(request: ChatRequest) -> StreamingResponse:
+        """Run one turn and stream the final assistant reply to the frontend in chunks.
+
+        This is UI-level streaming. The graph still completes one full turn internally,
+        then the final reply is emitted chunk by chunk so the user no longer sees a
+        blank screen until the entire answer is ready.
+        """
+
+        async def event_stream() -> AsyncIterator[bytes]:
+            thread_id = request.thread_id or next_thread_id()
+            await ensure_thread(app.state.thread_store, thread_id)
+            yield ndjson_line({"type": "thread", "thread_id": thread_id})
+            yield ndjson_line({"type": "assistant_start"})
+
+            result = await app.state.graph.ainvoke(
+                {"messages": [HumanMessage(content=request.message)]},
+                config=make_graph_config(thread_id),
+            )
+            reply = extract_last_ai_text(result["messages"])
+            record = await update_thread_after_chat(
+                app.state.thread_store,
+                thread_id=thread_id,
+                user_message=request.message,
+                assistant_message=reply,
+            )
+            detail = await load_thread_detail_data(app.state.graph, record)
+
+            for chunk in chunk_text(reply):
+                yield ndjson_line({"type": "assistant_delta", "content": chunk})
+                await asyncio.sleep(0.02)
+
+            yield ndjson_line(
+                {
+                    "type": "done",
+                    "thread": detail.thread.model_dump(),
+                    "state": detail.state.model_dump(),
+                    "messages": [message.model_dump() for message in detail.messages],
+                }
+            )
+
+        return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
     return app

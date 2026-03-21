@@ -34,15 +34,49 @@
         </div>
       </section>
 
-      <section class="chat-history" id="chatHistory">
-        <div class="empty-state" id="emptyState">请选择左侧会话，或先新建一个会话。</div>
-      </section>
+      <section class="chat-layout">
+        <div class="chat-column">
+          <section class="chat-history" id="chatHistory">
+            <div class="empty-state" id="emptyState">请选择左侧会话，或先新建一个会话。</div>
+          </section>
 
-      <label class="label" for="messageInput">你的问题</label>
-      <textarea id="messageInput" placeholder="例如：帮我做一个去成都的旅游规划"></textarea>
+          <label class="label" for="messageInput">你的问题</label>
+          <textarea id="messageInput" placeholder="例如：帮我做一个去成都的旅游规划"></textarea>
 
-      <section class="actions">
-        <button id="sendBtn" class="button primary" type="button">发送</button>
+          <section class="actions">
+            <button id="sendBtn" class="button primary" type="button">发送</button>
+          </section>
+        </div>
+
+        <aside class="state-panel">
+          <h2>状态可视化</h2>
+          <div class="state-grid">
+            <div class="state-card">
+              <span class="state-label">message_count</span>
+              <strong id="stateMessageCount">0</strong>
+            </div>
+            <div class="state-card">
+              <span class="state-label">user_message_count</span>
+              <strong id="stateUserCount">0</strong>
+            </div>
+            <div class="state-card">
+              <span class="state-label">assistant_message_count</span>
+              <strong id="stateAssistantCount">0</strong>
+            </div>
+            <div class="state-card">
+              <span class="state-label">tool_call_count</span>
+              <strong id="stateToolCallCount">0</strong>
+            </div>
+          </div>
+          <div class="state-route">
+            <span class="state-label">next_route_hint</span>
+            <code id="stateRouteHint">assistant</code>
+          </div>
+          <div class="state-query">
+            <span class="state-label">query_context</span>
+            <pre id="stateQueryContext">{}</pre>
+          </div>
+        </aside>
       </section>
     </section>
   </main>
