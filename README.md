@@ -213,7 +213,37 @@ python -m langgraph_study.mcp.amap_server --transport streamable-http
 4. 再看 `mcp/amap_server.py`，理解工具服务本身如何实现
 5. 最后运行 `app/cli.py` 和 Studio，看真实交互效果
 
-## 7. 参考依据
+## 7. 运行方式更新
+
+### 7.1 纯交互式 CLI
+
+```powershell
+python -m langgraph_study.app.cli
+```
+
+说明：
+- 不再使用 `--input` 传递问题
+- 启动后会通过终端提问来决定是否显示 Mermaid 图，以及是否复用已有 `thread_id`
+- 同一会话内继续提问即可，多轮状态由 checkpoint 按 `thread_id` 恢复
+
+### 7.2 最小 FastAPI 前端
+
+```powershell
+uvicorn langgraph_study.app.web:app --reload
+```
+
+然后打开：
+
+```text
+http://127.0.0.1:8000
+```
+
+这个前端是最小教学版本：
+- 浏览器里直接输入问题
+- 浏览器本地保存 `thread_id`
+- 调用的是同一套 LangGraph 运行时图
+
+## 8. 参考依据
 
 本项目主要参考以下官方资料：
 

@@ -32,6 +32,8 @@ def compile_graph(model=None, tools=None, checkpointer=None):
     builder.add_node("clarify", clarify_query)
     builder.add_node("assistant", assistant_node)
     builder.add_node("tools", ToolNode(resolved_tools))
+
+    
     builder.add_edge(START, "analyze_query")
     builder.add_conditional_edges(
         "analyze_query",

@@ -16,6 +16,8 @@
 - [x] 提供独立高德 MCP 服务
 - [x] 支持 LangGraph Studio 调试
 - [x] 拆分 `studio_graph` 与 `runtime_graph` 入口，隔离 Studio 与真实 MCP 运行时
+- [x] 将 CLI 调整为纯交互式版本
+- [x] 增加最小 FastAPI 前端用于浏览器交互
 
 ## Phase 1：增强旅行助手能力
 
@@ -41,7 +43,7 @@
 - [ ] 在 LangSmith 中观察工具调用轨迹
 - [ ] 增加错误恢复与重试策略
 - [ ] 增加用户输入校验
-- [ ] 增加更适合演示的前端界面
+- [ ] 将当前 FastAPI 最小前端升级为更适合演示的界面
 
 ## 维护项
 

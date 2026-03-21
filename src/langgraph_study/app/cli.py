@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import asyncio
 import sys
 from uuid import uuid4
@@ -11,38 +10,20 @@ from ..assistant.graph import build_persistent_graph
 from ..core.config import DEFAULT_USER_INPUT
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the travel assistant agent demo.")
-    parser.add_argument(
-        "--input",
-        help="One-shot travel question to feed into the agent.",
-    )
-    parser.add_argument(
-        "--thread-id",
-        help="Reuse an existing thread id to continue a previous conversation.",
-    )
-    parser.add_argument(
-        "--no-prompt",
-        action="store_true",
-        help="Run without interactive prompts and fall back to defaults.",
-    )
-    parser.add_argument(
-        "--show-mermaid",
-        action="store_true",
-        help="Print the Mermaid definition of the compiled graph.",
-    )
-    return parser.parse_args()
+def ask_yes_no(question: str, prompt=input) -> bool:
+    return prompt(question).strip().lower() in {"y", "yes"}
 
 
-def get_user_input(args: argparse.Namespace, prompt=input) -> str:
-    user_input = (args.input or "").strip()
+def ask_show_mermaid(prompt=input) -> bool:
+    return ask_yes_no("是否先打印 Mermaid 图结构？(y/N)：", prompt=prompt)
 
-    if user_input:
-        return user_input
 
-    if args.no_prompt:
-        return DEFAULT_USER_INPUT
+def ask_thread_id(prompt=input) -> str:
+    existing_thread_id = prompt("输入已有 thread_id 可继续旧会话；直接回车创建新会话：").strip()
+    return existing_thread_id or next_thread_id()
 
+
+def get_user_input(prompt=input) -> str:
     return (
         prompt(f"你想咨询什么旅行问题？（回车使用默认值：{DEFAULT_USER_INPUT}）：").strip()
         or DEFAULT_USER_INPUT
@@ -82,26 +63,24 @@ def next_thread_id() -> str:
     return uuid4().hex
 
 
-async def run_cli(args: argparse.Namespace) -> None:
+async def run_cli(prompt=input) -> None:
     graph = await build_persistent_graph()
-    thread_id = args.thread_id or next_thread_id()
+    show_mermaid = ask_show_mermaid(prompt=prompt)
+    thread_id = ask_thread_id(prompt=prompt)
 
-    if args.show_mermaid:
+    if show_mermaid:
         print(graph.get_graph().draw_mermaid())
         print()
 
-    one_shot = bool(args.input or args.no_prompt)
     print(f"当前会话 thread_id: {thread_id}")
 
     while True:
-        user_input = get_user_input(args)
+        user_input = get_user_input(prompt=prompt)
         if user_input.lower() in {"exit", "quit", "/exit"}:
             break
         if user_input.lower() == "/reset":
             thread_id = next_thread_id()
             print(f"会话已清空。新的 thread_id: {thread_id}")
-            if one_shot:
-                break
             continue
 
         result = await invoke_agent(graph, user_input, thread_id)
@@ -110,13 +89,9 @@ async def run_cli(args: argparse.Namespace) -> None:
         print_console_text(extract_last_ai_text(result["messages"]))
         print()
 
-        if one_shot:
-            break
-
 
 def main() -> None:
-    args = parse_args()
-    asyncio.run(run_cli(args))
+    asyncio.run(run_cli())
 
 
 if __name__ == "__main__":
