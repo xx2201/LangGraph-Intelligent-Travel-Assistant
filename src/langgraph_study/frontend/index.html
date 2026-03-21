@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LangGraph Travel Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="page">
+    <section class="panel">
+      <header class="hero">
+        <p class="eyebrow">LangGraph Study Project</p>
+        <h1>Travel Assistant</h1>
+        <p class="summary">
+          This frontend is intentionally small. Its job is only to collect user input,
+          show the current thread id, and call the backend API.
+        </p>
+      </header>
+
+      <section class="toolbar">
+        <div class="thread-box">
+          <span class="thread-label">Current thread_id</span>
+          <code id="threadId">not-created</code>
+        </div>
+        <button id="newThreadBtn" class="button secondary" type="button">New Thread</button>
+      </section>
+
+      <label class="label" for="messageInput">Your question</label>
+      <textarea id="messageInput" placeholder="例如：帮我做一个去成都的旅游规划"></textarea>
+
+      <section class="actions">
+        <button id="sendBtn" class="button primary" type="button">Send</button>
+      </section>
+
+      <section class="output-box">
+        <h2>Assistant Reply</h2>
+        <pre id="outputBox">Waiting for input...</pre>
+      </section>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

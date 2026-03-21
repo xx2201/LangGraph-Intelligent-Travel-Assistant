@@ -1,8 +1,11 @@
-from langgraph_study.app.web import render_homepage
+from langgraph_study.backend.api import get_frontend_dir
 
 
-def test_render_homepage_contains_expected_title() -> None:
-    html = render_homepage()
+def test_frontend_index_contains_expected_assets() -> None:
+    frontend_dir = get_frontend_dir()
+    html = (frontend_dir / "index.html").read_text(encoding="utf-8")
+    script = (frontend_dir / "app.js").read_text(encoding="utf-8")
 
-    assert "LangGraph 旅行助手" in html
-    assert "/api/chat" in html
+    assert "Travel Assistant" in html
+    assert "/static/app.js" in html
+    assert "/api/chat" in script

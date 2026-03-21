@@ -1,0 +1,141 @@
+:root {
+  --bg: #efe7da;
+  --panel: #fffaf2;
+  --border: #d9cbb6;
+  --text: #2f2418;
+  --muted: #6b6259;
+  --accent: #a14a1c;
+  --accent-dark: #7f3711;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, #fff5db 0, transparent 28%),
+    linear-gradient(160deg, #f7f2e8 0%, var(--bg) 100%);
+}
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 20px 56px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 24px 60px rgba(77, 45, 17, 0.09);
+}
+
+.hero h1 {
+  margin: 8px 0 12px;
+  font-size: 40px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary {
+  margin: 0 0 22px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.toolbar,
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.thread-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #f3ebdd;
+  padding: 12px 14px;
+  border-radius: 14px;
+  min-width: 280px;
+}
+
+.thread-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+textarea {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  font-size: 16px;
+  line-height: 1.6;
+  background: #fffdfa;
+}
+
+.button {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.button.primary {
+  background: var(--accent);
+  color: white;
+}
+
+.button.primary:hover {
+  background: var(--accent-dark);
+}
+
+.button.secondary {
+  background: #e9ddcb;
+  color: var(--text);
+}
+
+.output-box {
+  margin-top: 22px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fcf7ef;
+  padding: 18px;
+}
+
+.output-box h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  line-height: 1.7;
+}

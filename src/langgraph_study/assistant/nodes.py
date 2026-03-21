@@ -76,7 +76,11 @@ POI_HINTS = (
 
 
 def create_assistant_node(bound_model):
+    """Create the graph node that calls the LLM with the current state."""
+
     def assistant(state: TravelAssistantState):
+        """Return one AI message produced from prompts, context, and history."""
+
         context_message = build_query_context_message(state.get("query_context", {}))
         response = bound_model.invoke(
             [
@@ -91,12 +95,20 @@ def create_assistant_node(bound_model):
 
 
 def analyze_query(state: TravelAssistantState) -> dict[str, QueryContext]:
+    """Convert the latest user message into structured query context."""
+
     latest_user_text = extract_latest_user_text(state)
     context = build_query_context(latest_user_text)
     return {"query_context": context}
 
 
 def route_after_analysis(state: TravelAssistantState) -> Literal["clarify", "assistant"]:
+    """Choose the next node after ``analyze_query``.
+
+    This function is a pure router. It reads the ``query_context`` that was already
+    written into the state and then returns the label of the next node.
+    """
+
     query_context = state.get("query_context", {})
     if query_context.get("needs_clarification"):
         return "clarify"
@@ -104,6 +116,8 @@ def route_after_analysis(state: TravelAssistantState) -> Literal["clarify", "ass
 
 
 def clarify_query(state: TravelAssistantState):
+    """Generate a follow-up question when the original request is ambiguous."""
+
     query_context = state.get("query_context", {})
     location_text = query_context.get("location_text", "")
     reason = query_context.get("clarification_reason", "")
@@ -130,6 +144,8 @@ def clarify_query(state: TravelAssistantState):
 
 
 def extract_latest_user_text(state: TravelAssistantState) -> str:
+    """Read the newest human message from the message history."""
+
     for message in reversed(state["messages"]):
         if isinstance(message, HumanMessage):
             return message.content if isinstance(message.content, str) else str(message.content)
@@ -137,6 +153,8 @@ def extract_latest_user_text(state: TravelAssistantState) -> str:
 
 
 def build_query_context(user_text: str) -> QueryContext:
+    """Assemble a structured view of the user's latest request."""
+
     text = user_text.strip()
     intent = detect_intent(text)
     time_text = detect_time_text(text)
@@ -166,6 +184,8 @@ def build_query_context(user_text: str) -> QueryContext:
 
 
 def build_query_context_message(query_context: QueryContext) -> str:
+    """Turn structured context into a plain-text prompt block for the model."""
+
     lines = [
         "你会收到一个前置解析层生成的查询上下文。",
         "如果上下文里已有标准城市名，天气查询优先使用该城市作为工具参数。",
@@ -192,6 +212,8 @@ def build_query_context_message(query_context: QueryContext) -> str:
 
 
 def detect_intent(text: str):
+    """Guess the user's high-level intent from keyword rules."""
+
     if any(keyword in text for keyword in WEATHER_KEYWORDS):
         return "weather"
     if any(keyword in text for keyword in GEOCODE_KEYWORDS):
@@ -204,6 +226,8 @@ def detect_intent(text: str):
 
 
 def detect_time_text(text: str) -> str:
+    """Extract a simple time hint from the user text."""
+
     for token in TIME_PATTERNS:
         if token in text:
             return token
@@ -211,6 +235,8 @@ def detect_time_text(text: str) -> str:
 
 
 def extract_location_text(text: str, intent: str) -> str:
+    """Extract the location fragment that matches the detected intent."""
+
     if intent == "weather":
         patterns = [
             r"(?:帮我看看|帮我查查|帮我查下|查一下|查下|看看|看下)?(?P<location>[\u4e00-\u9fa5A-Za-z0-9·]{2,20}?)(?:今天天气|明天天气|后天天气|这周末天气|天气|气温|温度)",
@@ -233,6 +259,7 @@ def extract_location_text(text: str, intent: str) -> str:
 
 
 def clean_location_text(location_text: str) -> str:
+    """Remove helper phrases and punctuation from a raw location string."""
     text = location_text.strip("，。！？,.!? ")
     prefixes = ("帮我看看", "帮我查查", "帮我查下", "查一下", "查下", "看看", "看下")
     for prefix in prefixes:
@@ -244,6 +271,7 @@ def clean_location_text(location_text: str) -> str:
 
 
 def normalize_city(location_text: str) -> str:
+    """Normalize known city aliases into a standard city name."""
     if not location_text:
         return ""
     return CITY_ALIASES.get(location_text, "")
@@ -255,6 +283,8 @@ def assess_clarification_need(
     normalized_city: str,
     text: str,
 ) -> tuple[bool, str]:
+    """Decide whether the graph should ask the user for more details."""
+
     if intent == "weather":
         if not location_text:
             return True, "天气问题缺少明确地点。"

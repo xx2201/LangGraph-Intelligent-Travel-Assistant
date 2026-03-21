@@ -251,3 +251,22 @@ http://127.0.0.1:8000
 - LangChain MCP: https://docs.langchain.com/oss/python/langchain/mcp
 - MCP Python SDK: https://py.sdk.modelcontextprotocol.io/
 - LangChain Tongyi/Qwen 集成: https://docs.langchain.com/oss/python/integrations/chat/tongyi
+
+## 9. 本轮结构调整
+
+- 前端静态资源放在 `src/langgraph_study/frontend/`
+- 后端 API 放在 `src/langgraph_study/backend/api.py`
+- `src/langgraph_study/app/web.py` 只保留为兼容入口
+- 终端入口继续是 `src/langgraph_study/app/cli.py`
+
+启动前端：
+
+```powershell
+uvicorn langgraph_study.app.web:app --reload
+```
+
+打开：
+
+```text
+http://127.0.0.1:8000
+```

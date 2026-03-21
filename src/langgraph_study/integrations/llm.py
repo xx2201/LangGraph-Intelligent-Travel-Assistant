@@ -9,11 +9,15 @@ from ..core.config import DEFAULT_QWEN_MODEL
 
 
 def has_qwen_api_key() -> bool:
+    """Return whether the DashScope API key is available in the environment."""
+
     return bool(os.getenv("DASHSCOPE_API_KEY"))
 
 
 @lru_cache(maxsize=4)
 def get_qwen_model(model_name: str = DEFAULT_QWEN_MODEL) -> ChatTongyi:
+    """Create and cache the Tongyi chat model used by the assistant."""
+
     if not has_qwen_api_key():
         raise RuntimeError("未检测到 DASHSCOPE_API_KEY，无法创建 qwen3-max 模型。")
     return ChatTongyi(model=model_name)

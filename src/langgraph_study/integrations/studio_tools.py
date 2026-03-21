@@ -4,6 +4,8 @@ from langchain_core.tools import tool
 
 
 def _studio_only_message(tool_name: str) -> str:
+    """Explain that the current Studio tool is only a visualization placeholder."""
+
     return (
         f"{tool_name} 是 Studio 调试占位工具，当前只用于展示 LangGraph 的图结构和工具调用路径。"
         "如果你需要真实的高德 MCP 查询，请使用 CLI 运行时图。"
@@ -41,4 +43,6 @@ def input_tips(keywords: str, city: str | None = None, city_limit: bool = False)
 
 
 def get_studio_tools():
+    """Return placeholder tools that let Studio draw the tool path safely."""
+
     return (geocode, reverse_geocode, weather, input_tips)

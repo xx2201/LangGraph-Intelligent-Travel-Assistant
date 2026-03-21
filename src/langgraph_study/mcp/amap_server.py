@@ -12,6 +12,8 @@ mcp = FastMCP("Amap MCP Server", json_response=True)
 
 
 def _get_amap_api_key() -> str:
+    """Read the Amap API key from environment variables."""
+
     api_key = os.getenv("AMAP_API_KEY") or os.getenv("GAODE_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -25,6 +27,8 @@ def _request_amap(
     params: dict[str, Any],
     http_get=requests.get,
 ) -> dict[str, Any]:
+    """Send one HTTP request to the Amap REST API and normalize the response shape."""
+
     request_params = {
         "key": _get_amap_api_key(),
         **params,
@@ -134,6 +138,8 @@ def input_tips(
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse the transport mode used when the MCP server process starts."""
+
     parser = argparse.ArgumentParser(description="Run the Amap MCP server.")
     parser.add_argument(
         "--transport",
@@ -145,6 +151,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Start the MCP server with the chosen transport."""
+
     args = parse_args()
     mcp.run(transport=args.transport)
 
