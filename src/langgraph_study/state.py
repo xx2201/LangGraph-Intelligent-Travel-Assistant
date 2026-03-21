@@ -1,22 +1,9 @@
 from __future__ import annotations
 
-import operator
-from typing import Annotated, Literal, TypeAlias
-from typing_extensions import TypedDict
+from langgraph.graph import MessagesState
 
 
-Route: TypeAlias = Literal["overview", "state", "control_flow", "memory"]
+class TravelAssistantState(MessagesState):
+    """Message-based state for the travel assistant agent."""
 
-
-class LearningState(TypedDict, total=False):
-    """Shared state flowing through the learning graph."""
-
-    input: str
-    topic: str
-    background: str
-    route: Route
-    notes: Annotated[list[str], operator.add]
-    answer: str
-    next_step: str
-    response_source: str
-    response_error: str
+    pass

@@ -1,54 +1,24 @@
 from __future__ import annotations
 
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import START, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
 
-from .nodes import (
-    analyze_topic,
-    explain_control_flow,
-    explain_memory,
-    explain_overview,
-    explain_state,
-    finalize,
-    normalize_input,
-)
-from .state import LearningState, Route
+from .llm import get_qwen_model
+from .mcp_tools import get_amap_tools
+from .nodes import create_assistant_node
+from .state import TravelAssistantState
 
 
-def route_topic(state: LearningState) -> Route:
-    return state["route"]
+def build_graph(model=None, tools=None):
+    resolved_tools = list(tools) if tools is not None else list(get_amap_tools())
+    resolved_model = model or get_qwen_model()
+    assistant_node = create_assistant_node(resolved_model.bind_tools(resolved_tools))
 
-
-def build_graph():
-    builder = StateGraph(LearningState)
-
-    builder.add_node("normalize_input", normalize_input)
-    builder.add_node("analyze_topic", analyze_topic)
-    builder.add_node("overview", explain_overview)
-    builder.add_node("state", explain_state)
-    builder.add_node("control_flow", explain_control_flow)
-    builder.add_node("memory", explain_memory)
-    builder.add_node("finalize", finalize)
-
-    builder.add_edge(START, "normalize_input")
-    builder.add_edge("normalize_input", "analyze_topic")
-    builder.add_conditional_edges(
-        "analyze_topic",
-        route_topic,
-        {
-            "overview": "overview",
-            "state": "state",
-            "control_flow": "control_flow",
-            "memory": "memory",
-        },
-    )
-
-    builder.add_edge("overview", "finalize")
-    builder.add_edge("state", "finalize")
-    builder.add_edge("control_flow", "finalize")
-    builder.add_edge("memory", "finalize")
-    builder.add_edge("finalize", END)
+    builder = StateGraph(TravelAssistantState)
+    builder.add_node("assistant", assistant_node)
+    builder.add_node("tools", ToolNode(resolved_tools))
+    builder.add_edge(START, "assistant")
+    builder.add_conditional_edges("assistant", tools_condition)
+    builder.add_edge("tools", "assistant")
 
     return builder.compile()
-
-
-graph = build_graph()

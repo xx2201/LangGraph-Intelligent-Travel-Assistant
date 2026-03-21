@@ -1,31 +1,26 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
 from pathlib import Path
 
+from langchain_core.messages import AIMessage, HumanMessage
+
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from langgraph_study.config import DEFAULT_BACKGROUND, DEFAULT_INPUT
+    from langgraph_study.config import DEFAULT_USER_INPUT
     from langgraph_study.graph import build_graph
 else:
-    from .config import DEFAULT_BACKGROUND, DEFAULT_INPUT
+    from .config import DEFAULT_USER_INPUT
     from .graph import build_graph
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the minimal LangGraph study demo.")
+    parser = argparse.ArgumentParser(description="Run the travel assistant agent demo.")
     parser.add_argument(
         "--input",
-        help="Natural language learning request to feed into the graph.",
-    )
-    parser.add_argument(
-        "--topic",
-        help="Backward-compatible alias of --input.",
-    )
-    parser.add_argument(
-        "--background",
-        help="Current background information.",
+        help="One-shot travel question to feed into the agent.",
     )
     parser.add_argument(
         "--no-prompt",
@@ -40,38 +35,32 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_initial_state(
-    args: argparse.Namespace,
-    prompt=input,
-) -> dict[str, object]:
-    user_input = (args.input or args.topic or "").strip()
-    background = (args.background or "").strip()
+def get_user_input(args: argparse.Namespace, prompt=input) -> str:
+    user_input = (args.input or "").strip()
 
-    if not user_input:
-        if args.no_prompt:
-            user_input = DEFAULT_INPUT
-        else:
-            user_input = prompt(
-                f"请输入你当前想学习的问题或主题（回车使用默认值：{DEFAULT_INPUT}）："
-            ).strip()
-            if not user_input:
-                user_input = DEFAULT_INPUT
+    if user_input:
+        return user_input
 
-    if not background:
-        if args.no_prompt:
-            background = DEFAULT_BACKGROUND
-        else:
-            background = prompt(
-                f"请输入你的背景（回车使用默认值：{DEFAULT_BACKGROUND}）："
-            ).strip()
-            if not background:
-                background = DEFAULT_BACKGROUND
+    if args.no_prompt:
+        return DEFAULT_USER_INPUT
 
-    return {
-        "input": user_input,
-        "background": background,
-        "notes": [],
-    }
+    return (
+        prompt(f"你想咨询什么旅行问题？（回车使用默认值：{DEFAULT_USER_INPUT}）：").strip()
+        or DEFAULT_USER_INPUT
+    )
+
+
+def extract_last_ai_text(messages) -> str:
+    for message in reversed(messages):
+        if isinstance(message, AIMessage):
+            if isinstance(message.content, str):
+                return message.content
+            return str(message.content)
+    return ""
+
+
+async def invoke_agent(graph, messages):
+    return await graph.ainvoke({"messages": messages})
 
 
 def main() -> None:
@@ -82,31 +71,30 @@ def main() -> None:
         print(graph.get_graph().draw_mermaid())
         print()
 
-    initial_state = build_initial_state(args)
-    result = graph.invoke(initial_state)
+    messages = []
+    one_shot = bool(args.input or args.no_prompt)
 
-    print("=== Topic ===")
-    print(result["topic"])
-    print()
-    print("=== Source ===")
-    print(result["response_source"])
-    print()
-    if result.get("response_error"):
-        print("=== Model Error ===")
-        print(result["response_error"])
+    while True:
+        user_input = get_user_input(args)
+        if user_input.lower() in {"exit", "quit", "/exit"}:
+            break
+        if user_input.lower() == "/reset":
+            messages = []
+            print("会话已清空。")
+            if one_shot:
+                break
+            continue
+
+        messages.append(HumanMessage(content=user_input))
+        result = asyncio.run(invoke_agent(graph, messages))
+        messages = result["messages"]
+
+        print("=== Assistant ===")
+        print(extract_last_ai_text(messages))
         print()
-    print("=== Route ===")
-    print(result["route"])
-    print()
-    print("=== Answer ===")
-    print(result["answer"])
-    print()
-    print("=== Next Step ===")
-    print(result["next_step"])
-    print()
-    print("=== Notes ===")
-    for note in result["notes"]:
-        print(f"- {note}")
+
+        if one_shot:
+            break
 
 
 if __name__ == "__main__":

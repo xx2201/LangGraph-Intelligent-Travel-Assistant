@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -137,6 +138,17 @@ def input_tips(
     }
 
 
-if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the Amap MCP server.")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "streamable-http"],
+        default="stdio",
+        help="MCP transport type.",
+    )
+    return parser.parse_args()
 
+
+if __name__ == "__main__":
+    args = parse_args()
+    mcp.run(transport=args.transport)
