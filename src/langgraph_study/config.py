@@ -3,6 +3,7 @@ from __future__ import annotations
 DEFAULT_USER_INPUT = "帮我看看北京今天天气怎么样，适合出门吗？"
 DEFAULT_QWEN_MODEL = "qwen3-max"
 AMAP_MCP_MODULE = "langgraph_study.amap_mcp_server"
+CHECKPOINT_DB_PATH = ".langgraph_data/checkpoints.sqlite"
 TRAVEL_AGENT_SYSTEM_PROMPT = """
 你是一个智能旅行助手，负责回答天气、地点、城市出行、景点、地址解析等问题。
 

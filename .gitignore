@@ -6,5 +6,6 @@ dist/
 build/
 *.egg-info/
 .conda/
+.langgraph_data/
 .langgraph_api/
 langgraph-dev.log

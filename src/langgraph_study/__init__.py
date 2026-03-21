@@ -1,2 +1,5 @@
-"""Minimal LangGraph study project."""
+"""LangGraph travel assistant study project."""
 
+from .graph import build_graph
+
+__all__ = ["build_graph"]

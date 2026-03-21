@@ -1,6 +1,6 @@
 from typing import Any
 
-from langgraph_study import amap_mcp_server
+from langgraph_study.mcp import amap_server
 
 
 class DummyResponse:
@@ -19,7 +19,7 @@ def test_request_amap_requires_api_key(monkeypatch) -> None:
     monkeypatch.delenv("GAODE_API_KEY", raising=False)
 
     try:
-        amap_mcp_server._request_amap("weather/weatherInfo", {"city": "北京"})
+        amap_server._request_amap("weather/weatherInfo", {"city": "北京"})
     except RuntimeError as exc:
         assert "AMAP_API_KEY" in str(exc)
     else:
@@ -27,7 +27,7 @@ def test_request_amap_requires_api_key(monkeypatch) -> None:
 
 
 def test_geocode_returns_structured_payload(monkeypatch) -> None:
-    monkeypatch.setattr(amap_mcp_server, "_request_amap", lambda path, params: {
+    monkeypatch.setattr(amap_server, "_request_amap", lambda path, params: {
         "status": "1",
         "info": "OK",
         "infocode": "10000",
@@ -37,7 +37,7 @@ def test_geocode_returns_structured_payload(monkeypatch) -> None:
         },
     })
 
-    result = amap_mcp_server.geocode("北京市朝阳区")
+    result = amap_server.geocode("北京市朝阳区")
 
     assert result["status"] == "1"
     assert result["count"] == "1"
@@ -45,7 +45,7 @@ def test_geocode_returns_structured_payload(monkeypatch) -> None:
 
 
 def test_weather_returns_lives(monkeypatch) -> None:
-    monkeypatch.setattr(amap_mcp_server, "_request_amap", lambda path, params: {
+    monkeypatch.setattr(amap_server, "_request_amap", lambda path, params: {
         "status": "1",
         "info": "OK",
         "infocode": "10000",
@@ -55,7 +55,7 @@ def test_weather_returns_lives(monkeypatch) -> None:
         },
     })
 
-    result = amap_mcp_server.weather("北京")
+    result = amap_server.weather("北京")
 
     assert result["status"] == "1"
     assert result["lives"][0]["city"] == "北京"

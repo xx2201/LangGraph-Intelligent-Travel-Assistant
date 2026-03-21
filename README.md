@@ -8,6 +8,7 @@
 - 使用 `qwen3-max` 作为决策模型
 - 使用高德 MCP 工具提供天气、地理编码、逆地理编码和地点提示能力
 - 在进入模型前增加参数澄清与地点消歧层
+- 使用 `checkpointer + thread_id` 恢复多轮上下文
 - 使用 LangGraph 的 `assistant -> tools -> assistant` 循环完成工具调用
 
 ## 1. 项目结构
@@ -18,10 +19,25 @@ langgraph/
 │  └─ langgraph_study/
 │     ├─ __init__.py
 │     ├─ amap_mcp_server.py
+│     ├─ app/
+│     │  ├─ __init__.py
+│     │  └─ cli.py
+│     ├─ assistant/
+│     │  ├─ __init__.py
+│     │  ├─ graph.py
+│     │  ├─ nodes.py
+│     │  └─ state.py
 │     ├─ config.py
 │     ├─ graph.py
+│     ├─ integrations/
+│     │  ├─ __init__.py
+│     │  ├─ llm.py
+│     │  └─ mcp_tools.py
 │     ├─ llm.py
 │     ├─ main.py
+│     ├─ mcp/
+│     │  ├─ __init__.py
+│     │  └─ amap_server.py
 │     ├─ mcp_tools.py
 │     ├─ nodes.py
 │     └─ state.py
@@ -45,7 +61,8 @@ langgraph/
 4. 如果信息足够，`assistant` 节点调用 `qwen3-max`
 5. 模型判断需要工具时，调用高德 MCP 工具
 6. 工具结果回到 `assistant`
-7. 模型整理结果并输出最终回答
+7. `checkpointer` 按 `thread_id` 持久化状态
+8. 模型整理结果并输出最终回答
 
 这比之前的“固定路由图”更接近真实 Agent。
 
@@ -99,6 +116,19 @@ python -m langgraph_study.main
 python -m langgraph_study.main --input "北京今天天气怎么样？"
 ```
 
+如果你希望在不同命令之间继续同一段对话，显式传同一个 `thread_id`：
+
+```powershell
+python -m langgraph_study.main --thread-id trip-demo --input "北京今天天气怎么样？"
+python -m langgraph_study.main --thread-id trip-demo --input "那上海呢？"
+```
+
+说明：
+
+- 当前 CLI 会打印正在使用的 `thread_id`
+- `/reset` 会创建新的 `thread_id`
+- checkpoint 默认写入 `.langgraph_data/checkpoints.sqlite`
+
 ### 4.2 查看图结构
 
 ```powershell
@@ -141,45 +171,46 @@ python -m langgraph_study.amap_mcp_server --transport streamable-http
 
 ## 5. 代码入口说明
 
-### `src/langgraph_study/graph.py`
+### `src/langgraph_study/assistant/graph.py`
 
-定义 Agent 图结构：
+定义主图结构与 checkpoint 接入：
 
 - `analyze_query` 节点
 - `clarify` 节点
 - `assistant` 节点
 - `tools` 节点
 - `analyze_query -> clarify/assistant -> tools -> assistant` 流程
+- `build_persistent_graph()` 为 CLI 构建持久化图
 
-### `src/langgraph_study/nodes.py`
+### `src/langgraph_study/assistant/nodes.py`
 
 定义模型节点逻辑。这里不是手写业务路由，而是把系统提示词和对话消息送给模型。
 
-### `src/langgraph_study/llm.py`
+### `src/langgraph_study/integrations/llm.py`
 
 负责创建 `qwen3-max` 模型实例。
 
-### `src/langgraph_study/mcp_tools.py`
+### `src/langgraph_study/integrations/mcp_tools.py`
 
 负责通过 MCP client 加载高德工具，并接入 Agent。
 
-### `src/langgraph_study/amap_mcp_server.py`
+### `src/langgraph_study/mcp/amap_server.py`
 
 提供高德 MCP 服务本体。
 
-### `src/langgraph_study/main.py`
+### `src/langgraph_study/app/cli.py`
 
-提供终端聊天入口，支持多轮会话。
+提供终端聊天入口，支持 `thread_id` 和多轮上下文恢复。
 
 ## 6. 学习顺序建议
 
 当前阶段建议按这个顺序看：
 
-1. 先看 `graph.py`，理解 Agent loop 结构
-2. 再看 `nodes.py`，理解模型节点如何工作
-3. 再看 `mcp_tools.py`，理解 MCP 工具如何接入 LangGraph
-4. 再看 `amap_mcp_server.py`，理解工具服务本身如何实现
-5. 最后运行 `main.py` 和 Studio，看真实交互效果
+1. 先看 `assistant/graph.py`，理解 Agent loop 与 checkpoint
+2. 再看 `assistant/nodes.py`，理解澄清层和模型节点
+3. 再看 `integrations/mcp_tools.py`，理解 MCP 工具如何接入 LangGraph
+4. 再看 `mcp/amap_server.py`，理解工具服务本身如何实现
+5. 最后运行 `app/cli.py` 和 Studio，看真实交互效果
 
 ## 7. 参考依据
 
