@@ -3,7 +3,11 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 import pytest
 
-from langgraph_study.assistant.graph import build_graph, build_persistent_graph
+from langgraph_study.assistant.graph import (
+    build_studio_graph,
+    build_graph_with_checkpointer,
+    build_persistent_graph,
+)
 
 
 def make_config(thread_id: str) -> dict:
@@ -64,8 +68,27 @@ class HistoryModel:
         return AIMessage(content=f"human_count={human_count}")
 
 
+def test_studio_graph_builds_without_real_mcp_tools(monkeypatch) -> None:
+    import langgraph_study.assistant.graph as graph_module
+
+    monkeypatch.setattr(graph_module, "get_qwen_model", lambda: EchoModel())
+    monkeypatch.setattr(
+        graph_module,
+        "get_amap_tools",
+        lambda: (_ for _ in ()).throw(AssertionError("studio graph should not load runtime MCP tools")),
+    )
+
+    graph = build_studio_graph()
+
+    assert graph is not None
+
+
 def test_graph_returns_direct_answer_without_tools() -> None:
-    graph = build_graph(model=EchoModel(), tools=[], checkpointer=InMemorySaver())
+    graph = build_graph_with_checkpointer(
+        model=EchoModel(),
+        tools=[],
+        checkpointer=InMemorySaver(),
+    )
     result = graph.invoke(
         {"messages": [HumanMessage(content="你好")]},
         config=make_config("thread-echo"),
@@ -82,7 +105,11 @@ def test_graph_completes_tool_loop() -> None:
         return f"{city}今天天气晴。"
 
     model = ToolCallingModel()
-    graph = build_graph(model=model, tools=[weather], checkpointer=InMemorySaver())
+    graph = build_graph_with_checkpointer(
+        model=model,
+        tools=[weather],
+        checkpointer=InMemorySaver(),
+    )
     result = graph.invoke(
         {"messages": [HumanMessage(content="北京天气怎么样？")]},
         config=make_config("thread-weather"),
@@ -94,7 +121,11 @@ def test_graph_completes_tool_loop() -> None:
 
 
 def test_graph_requests_clarification_for_ambiguous_weather_question() -> None:
-    graph = build_graph(model=GuardModel(), tools=[], checkpointer=InMemorySaver())
+    graph = build_graph_with_checkpointer(
+        model=GuardModel(),
+        tools=[],
+        checkpointer=InMemorySaver(),
+    )
     result = graph.invoke(
         {"messages": [HumanMessage(content="今天天气怎么样？")]},
         config=make_config("thread-clarify"),
@@ -105,7 +136,11 @@ def test_graph_requests_clarification_for_ambiguous_weather_question() -> None:
 
 
 def test_graph_restores_context_with_same_thread_id() -> None:
-    graph = build_graph(model=HistoryModel(), tools=[], checkpointer=InMemorySaver())
+    graph = build_graph_with_checkpointer(
+        model=HistoryModel(),
+        tools=[],
+        checkpointer=InMemorySaver(),
+    )
     config = make_config("thread-history")
 
     first = graph.invoke(

@@ -15,6 +15,7 @@
 - [x] 移除根层兼容文件，只保留分层目录实现
 - [x] 提供独立高德 MCP 服务
 - [x] 支持 LangGraph Studio 调试
+- [x] 拆分 `studio_graph` 与 `runtime_graph` 入口，隔离 Studio 与真实 MCP 运行时
 
 ## Phase 1：增强旅行助手能力
 

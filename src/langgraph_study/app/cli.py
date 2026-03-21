@@ -117,3 +117,7 @@ async def run_cli(args: argparse.Namespace) -> None:
 def main() -> None:
     args = parse_args()
     asyncio.run(run_cli(args))
+
+
+if __name__ == "__main__":
+    main()

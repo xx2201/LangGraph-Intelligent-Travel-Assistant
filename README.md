@@ -136,6 +136,11 @@ python -m langgraph_study.app.cli --show-mermaid --no-prompt
 langgraph dev
 ```
 
+说明：
+- Studio 使用 `langgraph_study.assistant.graph:build_studio_graph`
+- `build_studio_graph()` 使用占位工具来展示图结构和工具调用路径，不会在导入阶段真实启动高德 MCP `stdio` 子进程
+- CLI 继续使用 `build_persistent_graph()`，会真实加载高德 MCP 工具并接入 SQLite checkpoint
+
 Studio 中可以直接提交：
 
 ```json
@@ -175,6 +180,7 @@ python -m langgraph_study.mcp.amap_server --transport streamable-http
 - `assistant` 节点
 - `tools` 节点
 - `analyze_query -> clarify/assistant -> tools -> assistant` 流程
+- `build_studio_graph()` 为 Studio 构建安全可导入的图
 - `build_persistent_graph()` 为 CLI 构建持久化图
 
 ### `src/langgraph_study/assistant/nodes.py`
