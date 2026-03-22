@@ -13,4 +13,6 @@ def test_frontend_index_contains_expected_assets() -> None:
     assert "/static/app.js" in html
     assert "/api/chat/stream" in script
     assert "/api/threads" in script
+    assert "DELETE" in script
+    assert "deleteThread" in script
     assert "upsertProcessEvent" in script

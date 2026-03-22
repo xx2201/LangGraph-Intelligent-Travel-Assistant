@@ -58,7 +58,10 @@ def bind_agent_model(model, tools):
     """Bind one specialist tool subset onto a model copy."""
 
     agent_model = clone_model(model)
-    return agent_model.bind_tools(list(tools))
+    resolved_tools = list(tools)
+    if not resolved_tools:
+        return agent_model
+    return agent_model.bind_tools(resolved_tools)
 
 
 def compile_graph(model=None, tools=None, checkpointer=None):

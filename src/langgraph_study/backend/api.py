@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -18,6 +18,7 @@ from ..core.config import THREAD_STORE_DB_PATH
 from .thread_store import (
     connect_thread_store,
     create_thread,
+    delete_thread,
     ensure_thread,
     get_thread,
     initialize_thread_store,
@@ -72,6 +73,18 @@ def get_frontend_dir() -> Path:
     """Return the directory that stores static frontend files."""
 
     return FRONTEND_DIR
+
+
+async def delete_graph_thread_data(graph, thread_id: str) -> None:
+    """Remove all checkpoint rows for one conversation thread."""
+
+    checkpointer = getattr(graph, "checkpointer", None)
+    connection = getattr(checkpointer, "conn", None)
+    if connection is None:
+        return
+    await connection.execute("DELETE FROM writes WHERE thread_id = ?", (thread_id,))
+    await connection.execute("DELETE FROM checkpoints WHERE thread_id = ?", (thread_id,))
+    await connection.commit()
 
 
 def summarize_thread_record(record) -> ThreadSummary:
@@ -440,6 +453,17 @@ def create_app() -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail="thread not found")
         return await load_thread_detail_data(app.state.graph, record)
+
+    @app.delete("/api/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_thread_endpoint(thread_id: str) -> Response:
+        """Delete one thread together with its persisted graph checkpoints."""
+
+        record = await get_thread(app.state.thread_store, thread_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="thread not found")
+        await delete_graph_thread_data(app.state.graph, thread_id)
+        await delete_thread(app.state.thread_store, thread_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.post("/api/chat", response_model=ChatResponse)
     async def chat(request: ChatRequest) -> ChatResponse:

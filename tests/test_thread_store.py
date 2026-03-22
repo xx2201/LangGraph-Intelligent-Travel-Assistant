@@ -3,6 +3,7 @@ import pytest
 from langgraph_study.backend.thread_store import (
     connect_thread_store,
     create_thread,
+    delete_thread,
     default_thread_title,
     get_thread,
     initialize_thread_store,
@@ -49,3 +50,19 @@ async def test_thread_store_update_after_chat(tmp_path) -> None:
     assert updated.last_user_message == "帮我做一个去成都的旅游规划"
     assert fetched is not None
     assert fetched.last_assistant_message == "好的，我先给你一版成都行程建议。"
+
+
+@pytest.mark.anyio
+async def test_thread_store_delete_thread(tmp_path) -> None:
+    db_path = tmp_path / "thread_store.sqlite"
+    connection = await connect_thread_store(str(db_path))
+    try:
+        await initialize_thread_store(connection)
+        await create_thread(connection, "thread-c")
+        deleted = await delete_thread(connection, "thread-c")
+        fetched = await get_thread(connection, "thread-c")
+    finally:
+        await connection.close()
+
+    assert deleted is True
+    assert fetched is None

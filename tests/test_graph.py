@@ -79,6 +79,17 @@ class StreamingHistoryModel:
         yield AIMessageChunk(content="world")
 
 
+class NoEmptyBindToolsModel:
+    def bind_tools(self, tools):
+        if not tools:
+            raise AssertionError("empty tool binding should be skipped")
+        self.tools = tools
+        return self
+
+    def invoke(self, messages):
+        return AIMessage(content="普通问答无需工具。")
+
+
 def test_studio_graph_builds_without_real_mcp_tools(monkeypatch) -> None:
     import langgraph_study.assistant.graph as graph_module
 
@@ -107,6 +118,21 @@ def test_graph_returns_direct_answer_without_tools() -> None:
 
     assert result["messages"][-1].content == "你好，我是旅行助手。"
     assert result["query_context"]["intent"] == "general"
+    assert result["active_agent"] == "general_agent"
+
+
+def test_general_agent_skips_empty_bind_tools() -> None:
+    graph = build_graph_with_checkpointer(
+        model=NoEmptyBindToolsModel(),
+        tools=[],
+        checkpointer=InMemorySaver(),
+    )
+    result = graph.invoke(
+        {"messages": [HumanMessage(content="你好")]},
+        config=make_config("thread-general-no-bind"),
+    )
+
+    assert result["messages"][-1].content == "普通问答无需工具。"
     assert result["active_agent"] == "general_agent"
 
 

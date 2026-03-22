@@ -199,3 +199,20 @@ async def update_thread_after_chat(
         last_user_message=user_message,
         last_assistant_message=assistant_message,
     )
+
+
+async def delete_thread(
+    connection: aiosqlite.Connection,
+    thread_id: str,
+) -> bool:
+    """Delete one thread metadata record and report whether it existed."""
+
+    cursor = await connection.execute(
+        """
+        DELETE FROM chat_threads
+        WHERE thread_id = ?
+        """,
+        (thread_id,),
+    )
+    await connection.commit()
+    return cursor.rowcount > 0

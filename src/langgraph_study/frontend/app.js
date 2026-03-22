@@ -74,9 +74,16 @@ function renderSessionList() {
   }
 
   threads.forEach((thread) => {
+    const item = document.createElement("article");
+    item.className = `session-item${thread.thread_id === activeThreadId ? " active" : ""}`;
+    item.dataset.threadId = thread.thread_id;
+
+    const row = document.createElement("div");
+    row.className = "session-item-row";
+
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `session-item${thread.thread_id === activeThreadId ? " active" : ""}`;
+    button.className = "session-item-select";
     button.dataset.threadId = thread.thread_id;
 
     const title = document.createElement("div");
@@ -95,7 +102,23 @@ function renderSessionList() {
     button.addEventListener("click", async () => {
       await selectThread(thread.thread_id);
     });
-    sessionList.appendChild(button);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "session-delete";
+    deleteButton.textContent = "删除";
+    deleteButton.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      try {
+        await deleteThread(thread.thread_id);
+      } catch (error) {
+        window.alert(`删除会话失败: ${error}`);
+      }
+    });
+
+    row.append(button, deleteButton);
+    item.appendChild(row);
+    sessionList.appendChild(item);
   });
 }
 
@@ -231,6 +254,36 @@ async function createThread() {
   activeMessages = [];
   resetProcessTimeline("新会话已创建。发送一条消息后，这里会显示 Agent 动态过程。");
   renderApp();
+}
+
+async function deleteThread(threadId) {
+  const thread = threads.find((item) => item.thread_id === threadId);
+  const title = thread?.title || threadId;
+  if (!window.confirm(`确认删除会话“${title}”吗？这会同时删除持久化上下文。`)) {
+    return;
+  }
+
+  const response = await fetch(`/api/threads/${threadId}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  await refreshThreads();
+  const deletedCurrent = activeThreadId === threadId;
+  if (!deletedCurrent) {
+    renderApp();
+    return;
+  }
+
+  if (!threads.length) {
+    setActiveThreadId("");
+    activeMessages = [];
+    resetProcessTimeline("会话已删除。新建会话后，这里会显示新的执行过程。");
+    renderApp();
+    return;
+  }
+
+  await selectThread(threads[0].thread_id, false);
 }
 
 function appendUserMessage(content) {
