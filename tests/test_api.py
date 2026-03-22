@@ -28,14 +28,36 @@ def test_build_process_updates_marks_route_choice() -> None:
         {
             "event": "on_chain_end",
             "name": "route_after_analysis",
-            "data": {"output": "assistant"},
+            "data": {"output": "select_agent"},
         },
         tracker,
     )
 
     assert updates[0]["key"] == "route_after_analysis"
     assert updates[0]["status"] == "done"
-    assert "进入助手节点" in updates[0]["detail"]
+    assert "选择专职 agent" in updates[0]["detail"]
+
+
+def test_build_process_updates_marks_agent_selection() -> None:
+    tracker = {"assistant_round": 0, "current_assistant_key": "", "tool_round": 0, "tool_runs": {}}
+
+    updates = build_process_updates(
+        {
+            "event": "on_chain_end",
+            "name": "select_agent",
+            "data": {
+                "output": {
+                    "active_agent": "weather_agent",
+                    "agent_selection_reason": "识别到天气意图。",
+                }
+            },
+        },
+        tracker,
+    )
+
+    assert updates[0]["key"] == "select_agent"
+    assert updates[0]["status"] == "done"
+    assert "weather_agent" in updates[0]["detail"]
 
 
 def test_build_process_updates_tracks_tool_lifecycle() -> None:

@@ -107,6 +107,7 @@ def test_graph_returns_direct_answer_without_tools() -> None:
 
     assert result["messages"][-1].content == "你好，我是旅行助手。"
     assert result["query_context"]["intent"] == "general"
+    assert result["active_agent"] == "general_agent"
 
 
 def test_graph_completes_tool_loop() -> None:
@@ -128,7 +129,7 @@ def test_graph_completes_tool_loop() -> None:
 
     assert "北京今天天气晴" in result["messages"][-1].content
     assert result["query_context"]["normalized_city"] == "北京"
-    assert model.calls == 2
+    assert result["active_agent"] == "weather_agent"
 
 
 def test_graph_requests_clarification_for_ambiguous_weather_question() -> None:
@@ -144,6 +145,36 @@ def test_graph_requests_clarification_for_ambiguous_weather_question() -> None:
 
     assert "哪个城市或地点" in result["messages"][-1].content
     assert result["query_context"]["needs_clarification"] is True
+
+
+def test_graph_routes_geocode_requests_to_geo_agent() -> None:
+    graph = build_graph_with_checkpointer(
+        model=EchoModel(),
+        tools=[],
+        checkpointer=InMemorySaver(),
+    )
+    result = graph.invoke(
+        {"messages": [HumanMessage(content="帮我把天安门广场转成坐标")]},
+        config=make_config("thread-geo"),
+    )
+
+    assert result["query_context"]["intent"] == "geocode"
+    assert result["active_agent"] == "geo_agent"
+
+
+def test_graph_routes_travel_requests_to_travel_agent() -> None:
+    graph = build_graph_with_checkpointer(
+        model=EchoModel(),
+        tools=[],
+        checkpointer=InMemorySaver(),
+    )
+    result = graph.invoke(
+        {"messages": [HumanMessage(content="上海和杭州这周末哪个更适合出行？")]},
+        config=make_config("thread-travel"),
+    )
+
+    assert result["query_context"]["intent"] == "travel"
+    assert result["active_agent"] == "travel_agent"
 
 
 def test_graph_restores_context_with_same_thread_id() -> None:

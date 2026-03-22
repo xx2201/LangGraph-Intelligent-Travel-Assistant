@@ -1,15 +1,16 @@
 # LangGraph 智能旅行助手
 
-这是一个基于 LangGraph、`qwen3-max` 和高德 MCP 的智能旅行助手项目。
+这是一个基于 LangGraph、`qwen3-max` 和高德 MCP 的多智能体旅行助手项目。
 
-当前项目已经不是最初的“学习主题路由图”，而是一个真正的 Agent 原型：
+当前项目已经不是最初的“学习主题路由图”，而是一个真正的多智能体 Agent 原型：
 
 - 使用 `MessagesState` 维护多轮对话
-- 使用 `qwen3-max` 作为决策模型
+- 使用 `qwen3-max` 作为多个专职 agent 的底座模型
 - 使用高德 MCP 工具提供天气、地理编码、逆地理编码和地点提示能力
 - 在进入模型前增加参数澄清与地点消歧层
+- 将单 assistant 拆分为 `weather / geo / travel / general` 四个专职 agent
 - 使用 `checkpointer + thread_id` 恢复多轮上下文
-- 使用 LangGraph 的 `assistant -> tools -> assistant` 循环完成工具调用
+- 使用 LangGraph 的 `specialist agent -> tools -> specialist agent` 循环完成工具调用
 
 ## 1. 项目结构
 
@@ -48,18 +49,19 @@ langgraph/
 
 ## 2. 当前工作流程
 
-主图是一个真正的 Agent loop：
+主图是一个真正的多智能体 Agent loop：
 
 1. 用户输入旅行问题
 2. `analyze_query` 节点先抽取意图、地点和时间线索
 3. 如果地点不清晰，`clarify` 节点先向用户追问
-4. 如果信息足够，`assistant` 节点调用 `qwen3-max`
-5. 模型判断需要工具时，调用高德 MCP 工具
-6. 工具结果回到 `assistant`
-7. `checkpointer` 按 `thread_id` 持久化状态
-8. 模型整理结果并输出最终回答
+4. 如果信息足够，`select_agent` 节点选择最合适的专职 agent
+5. 专职 agent 调用 `qwen3-max` 进行决策
+6. 模型判断需要工具时，调用该 agent 允许使用的高德 MCP 工具
+7. 工具结果回到当前专职 agent
+8. `checkpointer` 按 `thread_id` 持久化状态
+9. 专职 agent 整理结果并输出最终回答
 
-这比之前的“固定路由图”更接近真实 Agent。
+这比之前的“固定路由图”更接近真实的 supervisor-style 多智能体工作流。
 
 ## 3. 环境准备
 
@@ -177,15 +179,16 @@ python -m langgraph_study.mcp.amap_server --transport streamable-http
 
 - `analyze_query` 节点
 - `clarify` 节点
-- `assistant` 节点
-- `tools` 节点
-- `analyze_query -> clarify/assistant -> tools -> assistant` 流程
+- `select_agent` 节点
+- `weather_agent`、`geo_agent`、`travel_agent`、`general_agent` 节点
+- 按专职 agent 区分的工具节点
+- `analyze_query -> clarify/select_agent -> specialist_agent -> tools -> specialist_agent` 流程
 - `build_studio_graph()` 为 Studio 构建安全可导入的图
 - `build_persistent_graph()` 为 CLI 构建持久化图
 
 ### `src/langgraph_study/assistant/nodes.py`
 
-定义模型节点逻辑。这里不是手写业务路由，而是把系统提示词和对话消息送给模型。
+定义多智能体节点逻辑。这里会为不同专职 agent 组装不同系统提示词，并把系统提示词和对话消息送给模型。
 
 ### `src/langgraph_study/integrations/llm.py`
 

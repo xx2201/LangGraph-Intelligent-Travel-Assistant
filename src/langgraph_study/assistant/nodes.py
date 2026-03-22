@@ -3,11 +3,17 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, message_chunk_to_message
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, message_chunk_to_message
 from langchain_core.runnables import RunnableLambda
 
-from ..core.config import TRAVEL_AGENT_SYSTEM_PROMPT
-from .state import QueryContext, TravelAssistantState
+from ..core.config import (
+    GENERAL_AGENT_SYSTEM_PROMPT,
+    GEO_AGENT_SYSTEM_PROMPT,
+    TRAVEL_AGENT_SYSTEM_PROMPT,
+    TRAVEL_PLANNER_AGENT_SYSTEM_PROMPT,
+    WEATHER_AGENT_SYSTEM_PROMPT,
+)
+from .state import QueryContext, SpecialistAgent, TravelAssistantState
 
 WEATHER_KEYWORDS = ("天气", "气温", "温度", "下雨", "下雪", "冷不冷", "热不热", "适合出门")
 GEOCODE_KEYWORDS = ("坐标", "经纬度", "定位", "地址", "地理编码")
@@ -75,40 +81,60 @@ POI_HINTS = (
     "soho",
 )
 
+AGENT_LABELS: dict[SpecialistAgent, str] = {
+    "weather_agent": "Weather Agent",
+    "geo_agent": "Geo Agent",
+    "travel_agent": "Travel Planner Agent",
+    "general_agent": "General Agent",
+}
 
-def create_assistant_node(bound_model):
-    """Create the graph node that calls the LLM with the current state."""
+AGENT_PROMPTS: dict[SpecialistAgent, str] = {
+    "weather_agent": WEATHER_AGENT_SYSTEM_PROMPT,
+    "geo_agent": GEO_AGENT_SYSTEM_PROMPT,
+    "travel_agent": TRAVEL_PLANNER_AGENT_SYSTEM_PROMPT,
+    "general_agent": GENERAL_AGENT_SYSTEM_PROMPT,
+}
+
+
+def create_specialist_node(bound_model, agent_name: SpecialistAgent):
+    """Create one specialist agent node bound to a dedicated prompt and tool set."""
+
+    specialist_prompt = AGENT_PROMPTS[agent_name]
+    specialist_label = AGENT_LABELS[agent_name]
 
     def build_messages(state: TravelAssistantState):
         context_message = build_query_context_message(state.get("query_context", {}))
+        selection_reason = state.get("agent_selection_reason", "")
+        routing_message = [f"当前接管角色：{specialist_label}。"]
+        if selection_reason:
+            routing_message.append(f"选择原因：{selection_reason}")
         return [
             SystemMessage(content=TRAVEL_AGENT_SYSTEM_PROMPT),
+            SystemMessage(content=specialist_prompt),
+            SystemMessage(content="\n".join(routing_message)),
             SystemMessage(content=context_message),
             *state["messages"],
         ]
 
     def assistant(state: TravelAssistantState):
-        """Return one AI message produced from prompts, context, and history."""
-
         response = run_bound_model_sync(bound_model, build_messages(state))
         return {"messages": [response]}
 
     async def assistant_async(state: TravelAssistantState):
-        """Async version of the assistant node that preserves model stream events."""
-
         response = await run_bound_model(bound_model, build_messages(state))
         return {"messages": [response]}
 
-    return RunnableLambda(assistant, afunc=assistant_async, name="assistant")
+    return RunnableLambda(assistant, afunc=assistant_async, name=agent_name)
+
+
+def create_assistant_node(bound_model):
+    """Backward-compatible wrapper that keeps the old single-agent entrypoint."""
+
+    return create_specialist_node(bound_model, "general_agent")
 
 
 async def run_bound_model(bound_model, messages) -> AIMessage:
-    """Run the bound chat model with streaming support when available.
-
-    The node first tries to consume ``astream()`` so LangGraph can expose model stream
-    events to outer callers such as the web frontend. If streaming is not available,
-    it falls back to ``ainvoke()`` and then to ``invoke()``.
-    """
+    """Run the bound chat model with streaming support when available."""
 
     if hasattr(bound_model, "astream"):
         accumulated_chunk = None
@@ -156,17 +182,52 @@ def analyze_query(state: TravelAssistantState) -> dict[str, QueryContext]:
     return {"query_context": context}
 
 
-def route_after_analysis(state: TravelAssistantState) -> Literal["clarify", "assistant"]:
-    """Choose the next node after ``analyze_query``.
-
-    This function is a pure router. It reads the ``query_context`` that was already
-    written into the state and then returns the label of the next node.
-    """
+def route_after_analysis(state: TravelAssistantState) -> Literal["clarify", "select_agent"]:
+    """Choose whether the graph needs clarification or can select a specialist."""
 
     query_context = state.get("query_context", {})
     if query_context.get("needs_clarification"):
         return "clarify"
-    return "assistant"
+    return "select_agent"
+
+
+def select_specialist_agent(
+    state: TravelAssistantState,
+) -> dict[str, SpecialistAgent | str]:
+    """Pick the specialist agent that should own the next phase."""
+
+    query_context = state.get("query_context", {})
+    intent = query_context.get("intent", "general")
+    location = query_context.get("normalized_city") or query_context.get("location_text", "")
+    if intent == "weather":
+        return {
+            "active_agent": "weather_agent",
+            "agent_selection_reason": (
+                f"识别到天气意图，优先交给天气专职 agent。地点线索：{location or '未提供'}。"
+            ),
+        }
+    if intent == "geocode":
+        return {
+            "active_agent": "geo_agent",
+            "agent_selection_reason": "识别到坐标或地址解析意图，交给地理解析 agent。",
+        }
+    if intent in {"place_search", "travel"}:
+        return {
+            "active_agent": "travel_agent",
+            "agent_selection_reason": "识别到旅行规划或地点推荐意图，交给规划 agent。",
+        }
+    return {
+        "active_agent": "general_agent",
+        "agent_selection_reason": "未命中特定旅行子领域，交给通用 agent。",
+    }
+
+
+def route_to_specialist(
+    state: TravelAssistantState,
+) -> Literal["weather_agent", "geo_agent", "travel_agent", "general_agent"]:
+    """Route to the specialist selected by ``select_specialist_agent``."""
+
+    return state.get("active_agent", "general_agent")
 
 
 def clarify_query(state: TravelAssistantState):
@@ -314,6 +375,7 @@ def extract_location_text(text: str, intent: str) -> str:
 
 def clean_location_text(location_text: str) -> str:
     """Remove helper phrases and punctuation from a raw location string."""
+
     text = location_text.strip("，。！？,.!? ")
     prefixes = ("帮我看看", "帮我查查", "帮我查下", "查一下", "查下", "看看", "看下")
     for prefix in prefixes:
@@ -326,6 +388,7 @@ def clean_location_text(location_text: str) -> str:
 
 def normalize_city(location_text: str) -> str:
     """Normalize known city aliases into a standard city name."""
+
     if not location_text:
         return ""
     return CITY_ALIASES.get(location_text, "")

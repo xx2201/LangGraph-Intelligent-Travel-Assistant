@@ -187,6 +187,15 @@ def summarize_query_context(query_context: dict[str, Any]) -> str:
     return " | ".join(parts) if parts else "已完成查询预分析。"
 
 
+def summarize_agent_selection(data: dict[str, Any]) -> str:
+    """Summarize the selected specialist agent for the UI timeline."""
+
+    active_agent = data.get("active_agent", "general_agent")
+    reason = data.get("agent_selection_reason", "")
+    base = f"已选择 {active_agent}。"
+    return f"{base} {reason}".strip()
+
+
 def build_process_updates(event: dict[str, Any], tracker: dict[str, Any]) -> list[dict[str, Any]]:
     """Map LangGraph runtime events to a compact UI timeline model."""
 
@@ -221,7 +230,7 @@ def build_process_updates(event: dict[str, Any], tracker: dict[str, Any]) -> lis
         )
     elif event_type == "on_chain_end" and name == "route_after_analysis":
         route = data.get("output", "")
-        detail = "信息不足，先进入澄清节点。" if route == "clarify" else "信息足够，进入助手节点。"
+        detail = "信息不足，先进入澄清节点。" if route == "clarify" else "信息足够，准备选择专职 agent。"
         updates.append(
             {
                 "type": "process",
@@ -230,6 +239,28 @@ def build_process_updates(event: dict[str, Any], tracker: dict[str, Any]) -> lis
                 "status": "done",
                 "title": "选择下一步",
                 "detail": detail,
+            }
+        )
+    elif event_type == "on_chain_start" and name == "select_agent":
+        updates.append(
+            {
+                "type": "process",
+                "key": "select_agent",
+                "stage": "route",
+                "status": "running",
+                "title": "选择专职 Agent",
+                "detail": "根据预分析结果分配给最合适的专职 agent。",
+            }
+        )
+    elif event_type == "on_chain_end" and name == "select_agent":
+        updates.append(
+            {
+                "type": "process",
+                "key": "select_agent",
+                "stage": "route",
+                "status": "done",
+                "title": "专职 Agent 已选定",
+                "detail": summarize_agent_selection(data.get("output", {})),
             }
         )
     elif event_type == "on_chain_start" and name == "clarify":
@@ -252,6 +283,38 @@ def build_process_updates(event: dict[str, Any], tracker: dict[str, Any]) -> lis
                 "status": "done",
                 "title": "澄清完成",
                 "detail": "已生成追问，等待用户补充信息。",
+            }
+        )
+    elif event_type == "on_chain_start" and name in {
+        "weather_agent",
+        "geo_agent",
+        "travel_agent",
+        "general_agent",
+    }:
+        updates.append(
+            {
+                "type": "process",
+                "key": name,
+                "stage": "agent",
+                "status": "running",
+                "title": f"{name} 开始处理",
+                "detail": "专职 agent 正在读取上下文并准备生成决策。",
+            }
+        )
+    elif event_type == "on_chain_end" and name in {
+        "weather_agent",
+        "geo_agent",
+        "travel_agent",
+        "general_agent",
+    }:
+        updates.append(
+            {
+                "type": "process",
+                "key": name,
+                "stage": "agent",
+                "status": "done",
+                "title": f"{name} 本轮完成",
+                "detail": "专职 agent 已完成当前一轮输出。",
             }
         )
     elif event_type == "on_chat_model_start":
@@ -402,11 +465,11 @@ def create_app() -> FastAPI:
         """Run one turn and stream assistant output to the frontend.
 
         The implementation first tries to forward real model stream events coming from
-        ``graph.astream_events()``. This preserves the ``assistant -> tools ->
-        assistant`` control flow: tool-call-only phases emit no text, while the final
-        assistant phase can stream visible content. If the underlying model/tool stack
-        does not yield visible stream chunks, the endpoint falls back to chunking the
-        final answer so the UI still behaves incrementally.
+        ``graph.astream_events()``. This preserves the ``specialist_agent -> tools ->
+        specialist_agent`` control flow: tool-call-only phases emit no text, while the
+        final specialist-agent phase can stream visible content. If the underlying
+        model/tool stack does not yield visible stream chunks, the endpoint falls back
+        to chunking the final answer so the UI still behaves incrementally.
         """
 
         async def event_stream() -> AsyncIterator[bytes]:
