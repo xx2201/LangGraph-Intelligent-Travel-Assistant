@@ -8,7 +8,10 @@ from langgraph_study.assistant.graph import (
     build_graph_with_checkpointer,
     build_persistent_graph,
 )
+from langgraph_study.assistant.memory import build_noop_memory_manager
 from langgraph_study.assistant.nodes import run_bound_model
+from langgraph_study.core.config import MEMORY_SHORT_TERM_WINDOW
+from langgraph_study.integrations.memory import SQLiteLongTermMemoryStore
 
 
 def make_config(thread_id: str) -> dict:
@@ -88,6 +91,20 @@ class NoEmptyBindToolsModel:
 
     def invoke(self, messages):
         return AIMessage(content="普通问答无需工具。")
+
+
+class MemoryEchoModel:
+    def bind_tools(self, tools):
+        self.tools = tools
+        return self
+
+    def invoke(self, messages):
+        latest_human = ""
+        for message in reversed(messages):
+            if isinstance(message, HumanMessage):
+                latest_human = message.content
+                break
+        return AIMessage(content=f"reply:{latest_human}")
 
 
 def test_studio_graph_builds_without_real_mcp_tools(monkeypatch) -> None:
@@ -203,6 +220,28 @@ def test_graph_routes_travel_requests_to_travel_agent() -> None:
     assert result["active_agent"] == "travel_agent"
 
 
+def test_graph_infers_weather_followup_from_previous_turn() -> None:
+    graph = build_graph_with_checkpointer(
+        model=EchoModel(),
+        tools=[],
+        checkpointer=InMemorySaver(),
+    )
+    config = make_config("thread-weather-followup")
+
+    graph.invoke(
+        {"messages": [HumanMessage(content="成都天气怎么样")]},
+        config=config,
+    )
+    second = graph.invoke(
+        {"messages": [HumanMessage(content="上海呢")]},
+        config=config,
+    )
+
+    assert second["query_context"]["intent"] == "weather"
+    assert second["query_context"]["normalized_city"] == "上海"
+    assert second["active_agent"] == "weather_agent"
+
+
 def test_graph_restores_context_with_same_thread_id() -> None:
     graph = build_graph_with_checkpointer(
         model=HistoryModel(),
@@ -227,12 +266,14 @@ def test_graph_restores_context_with_same_thread_id() -> None:
 @pytest.mark.anyio
 async def test_persistent_graph_restores_context_across_graph_instances(tmp_path) -> None:
     db_path = tmp_path / "checkpoints.sqlite"
+    memory_db_path = tmp_path / "long_term_memory.sqlite"
     config = make_config("thread-persistent")
 
     first_graph = await build_persistent_graph(
         model=HistoryModel(),
         tools=[],
         db_path=str(db_path),
+        memory_db_path=str(memory_db_path),
     )
     try:
         first = await first_graph.ainvoke(
@@ -244,6 +285,7 @@ async def test_persistent_graph_restores_context_across_graph_instances(tmp_path
             model=HistoryModel(),
             tools=[],
             db_path=str(db_path),
+            memory_db_path=str(memory_db_path),
         )
         try:
             second = await second_graph.ainvoke(
@@ -267,3 +309,49 @@ async def test_run_bound_model_prefers_astream_and_merges_chunks() -> None:
 
     assert isinstance(result, AIMessage)
     assert result.content == "hello world"
+
+
+def test_graph_updates_summary_task_memory_and_trims_messages() -> None:
+    graph = build_graph_with_checkpointer(
+        model=MemoryEchoModel(),
+        tools=[],
+        checkpointer=InMemorySaver(),
+        memory_manager=build_noop_memory_manager(),
+    )
+    config = make_config("thread-memory-window")
+
+    result = None
+    for index in range(7):
+        result = graph.invoke(
+            {"messages": [HumanMessage(content=f"第{index + 1}次问成都天气和周末出行建议")]},
+            config=config,
+        )
+
+    assert result is not None
+    assert result["conversation_summary"]
+    assert result["task_memory"]["latest_user_request"] == "第7次问成都天气和周末出行建议"
+    assert result["task_memory"]["confirmed_city"] == "成都"
+    assert len(result["messages"]) <= MEMORY_SHORT_TERM_WINDOW
+
+
+def test_sqlite_long_term_memory_store_can_recall_preferences(tmp_path) -> None:
+    store = SQLiteLongTermMemoryStore(db_path=str(tmp_path / "memory.sqlite"))
+    store.upsert(
+        scope="thread-1",
+        memory_type="preference",
+        content="用户喜欢慢节奏城市漫游，不喜欢赶路。",
+    )
+    store.upsert(
+        scope="thread-1",
+        memory_type="summary",
+        content="用户曾让助手规划成都五日游，预算两万元。",
+    )
+
+    results = store.search(
+        scope="thread-1",
+        query="帮我规划一个成都慢节奏旅行",
+        top_k=2,
+    )
+
+    assert len(results) == 2
+    assert any("慢节奏" in record.content for record in results)

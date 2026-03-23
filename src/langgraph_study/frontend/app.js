@@ -12,6 +12,7 @@ let threads = [];
 let activeThreadId = localStorage.getItem(ACTIVE_THREAD_KEY) || "";
 let activeMessages = [];
 let activeProcessEvents = [];
+let activeAssistantContentEl = null;
 
 function setActiveThreadId(threadId) {
   activeThreadId = threadId;
@@ -68,7 +69,7 @@ function renderSessionList() {
   if (!threads.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "后端会话中心里还没有任何线程。先点击“新建会话”开始。";
+    empty.textContent = "还没有会话。";
     sessionList.appendChild(empty);
     return;
   }
@@ -122,8 +123,36 @@ function renderSessionList() {
   });
 }
 
+function createMessageElement(message) {
+  const wrapper = document.createElement("article");
+  wrapper.className = `message ${message.role}`;
+
+  const role = document.createElement("span");
+  role.className = "message-role";
+  role.textContent = message.role === "user" ? "You" : "Agent";
+
+  const content = document.createElement("div");
+  content.className = "message-content";
+  content.textContent = message.content;
+
+  wrapper.append(role, content);
+  return { wrapper, content };
+}
+
+function clearChatEmptyState() {
+  const empty = chatHistory.querySelector(".empty-state");
+  if (empty) {
+    empty.remove();
+  }
+}
+
+function scrollChatToBottom() {
+  chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
 function renderChatHistory() {
   chatHistory.innerHTML = "";
+  activeAssistantContentEl = null;
   updateThreadDisplay(activeThreadId);
 
   if (!activeThreadId) {
@@ -143,21 +172,14 @@ function renderChatHistory() {
   }
 
   activeMessages.forEach((message) => {
-    const wrapper = document.createElement("article");
-    wrapper.className = `message ${message.role}`;
-
-    const role = document.createElement("span");
-    role.className = "message-role";
-    role.textContent = message.role === "user" ? "User" : "Assistant";
-
-    const content = document.createElement("div");
-    content.textContent = message.content;
-
-    wrapper.append(role, content);
+    const { wrapper, content } = createMessageElement(message);
+    if (message.role === "assistant") {
+      activeAssistantContentEl = content;
+    }
     chatHistory.appendChild(wrapper);
   });
 
-  chatHistory.scrollTop = chatHistory.scrollHeight;
+  scrollChatToBottom();
 }
 
 function renderProcessTimeline(emptyText = "发送一条消息后，这里会动态出现本轮 Agent 执行步骤。") {
@@ -288,24 +310,37 @@ async function deleteThread(threadId) {
 
 function appendUserMessage(content) {
   activeMessages = [...activeMessages, { role: "user", content }];
-  renderChatHistory();
+  clearChatEmptyState();
+  const { wrapper } = createMessageElement({ role: "user", content });
+  chatHistory.appendChild(wrapper);
+  scrollChatToBottom();
 }
 
 function appendAssistantPlaceholder() {
   activeMessages = [...activeMessages, { role: "assistant", content: "" }];
-  renderChatHistory();
+  clearChatEmptyState();
+  const { wrapper, content } = createMessageElement({ role: "assistant", content: "" });
+  activeAssistantContentEl = content;
+  chatHistory.appendChild(wrapper);
+  scrollChatToBottom();
 }
 
 function appendAssistantDelta(content) {
   if (!activeMessages.length || activeMessages[activeMessages.length - 1].role !== "assistant") {
     appendAssistantPlaceholder();
   }
-  activeMessages = activeMessages.map((message, index) => {
-    if (index !== activeMessages.length - 1) {
-      return message;
-    }
-    return { ...message, content: `${message.content}${content}` };
-  });
+  const lastIndex = activeMessages.length - 1;
+  const lastMessage = activeMessages[lastIndex];
+  const nextMessage = { ...lastMessage, content: `${lastMessage.content}${content}` };
+  activeMessages = [
+    ...activeMessages.slice(0, lastIndex),
+    nextMessage,
+  ];
+  if (activeAssistantContentEl) {
+    activeAssistantContentEl.textContent = nextMessage.content;
+    scrollChatToBottom();
+    return;
+  }
   renderChatHistory();
 }
 
@@ -384,7 +419,8 @@ async function sendMessage() {
       if (event.type === "done") {
         await refreshThreads();
         activeMessages = event.messages;
-        renderApp();
+        renderSessionList();
+        renderChatHistory();
       }
     });
   } catch (error) {

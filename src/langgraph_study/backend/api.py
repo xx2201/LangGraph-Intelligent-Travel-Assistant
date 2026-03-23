@@ -85,6 +85,9 @@ async def delete_graph_thread_data(graph, thread_id: str) -> None:
     await connection.execute("DELETE FROM writes WHERE thread_id = ?", (thread_id,))
     await connection.execute("DELETE FROM checkpoints WHERE thread_id = ?", (thread_id,))
     await connection.commit()
+    memory_manager = getattr(graph, "memory_manager", None)
+    if memory_manager is not None:
+        await memory_manager.adelete_scope(thread_id)
 
 
 def summarize_thread_record(record) -> ThreadSummary:
@@ -276,6 +279,29 @@ def build_process_updates(event: dict[str, Any], tracker: dict[str, Any]) -> lis
                 "detail": summarize_agent_selection(data.get("output", {})),
             }
         )
+    elif event_type == "on_chain_start" and name == "recall_memory":
+        updates.append(
+            {
+                "type": "process",
+                "key": "recall_memory",
+                "stage": "memory",
+                "status": "running",
+                "title": "召回长期记忆",
+                "detail": "正在检索历史摘要和用户偏好。",
+            }
+        )
+    elif event_type == "on_chain_end" and name == "recall_memory":
+        recalled = data.get("output", {}).get("recalled_memories", [])
+        updates.append(
+            {
+                "type": "process",
+                "key": "recall_memory",
+                "stage": "memory",
+                "status": "done",
+                "title": "长期记忆召回完成",
+                "detail": "未命中相关记忆。" if not recalled else f"命中 {len(recalled)} 条相关长期记忆。",
+            }
+        )
     elif event_type == "on_chain_start" and name == "clarify":
         updates.append(
             {
@@ -296,6 +322,36 @@ def build_process_updates(event: dict[str, Any], tracker: dict[str, Any]) -> lis
                 "status": "done",
                 "title": "澄清完成",
                 "detail": "已生成追问，等待用户补充信息。",
+            }
+        )
+    elif event_type == "on_chain_start" and name == "finalize_memory":
+        updates.append(
+            {
+                "type": "process",
+                "key": "finalize_memory",
+                "stage": "memory",
+                "status": "running",
+                "title": "整理会话记忆",
+                "detail": "正在更新摘要、任务状态并裁剪消息窗口。",
+            }
+        )
+    elif event_type == "on_chain_end" and name == "finalize_memory":
+        output = data.get("output", {})
+        detail_parts: list[str] = []
+        if output.get("conversation_summary"):
+            detail_parts.append("摘要已更新")
+        if output.get("task_memory"):
+            detail_parts.append("任务状态已更新")
+        if output.get("messages"):
+            detail_parts.append("消息窗口已裁剪")
+        updates.append(
+            {
+                "type": "process",
+                "key": "finalize_memory",
+                "stage": "memory",
+                "status": "done",
+                "title": "会话记忆已收口",
+                "detail": "，".join(detail_parts) if detail_parts else "本轮无需额外记忆更新。",
             }
         )
     elif event_type == "on_chain_start" and name in {

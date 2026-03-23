@@ -60,6 +60,33 @@ def test_build_process_updates_marks_agent_selection() -> None:
     assert "weather_agent" in updates[0]["detail"]
 
 
+def test_build_process_updates_tracks_memory_nodes() -> None:
+    tracker = {"assistant_round": 0, "current_assistant_key": "", "tool_round": 0, "tool_runs": {}}
+
+    recall_updates = build_process_updates(
+        {
+            "event": "on_chain_end",
+            "name": "recall_memory",
+            "data": {"output": {"recalled_memories": ["用户偏好慢节奏旅行"]}},
+        },
+        tracker,
+    )
+    finalize_updates = build_process_updates(
+        {
+            "event": "on_chain_end",
+            "name": "finalize_memory",
+            "data": {"output": {"conversation_summary": "summary", "task_memory": {"current_goal": "成都旅行"}}},
+        },
+        tracker,
+    )
+
+    assert recall_updates[0]["key"] == "recall_memory"
+    assert recall_updates[0]["status"] == "done"
+    assert "长期记忆" in recall_updates[0]["title"]
+    assert finalize_updates[0]["key"] == "finalize_memory"
+    assert finalize_updates[0]["status"] == "done"
+
+
 def test_build_process_updates_tracks_tool_lifecycle() -> None:
     tracker = {"assistant_round": 0, "current_assistant_key": "", "tool_round": 0, "tool_runs": {}}
 

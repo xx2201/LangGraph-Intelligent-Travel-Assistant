@@ -11,17 +11,15 @@
     <aside class="sidebar-shell">
       <section class="panel session-panel">
         <header class="panel-head compact">
-          <p class="eyebrow">LangGraph Study</p>
-          <h1>会话列表</h1>
-          <p class="panel-copy">
-            左侧是后端会话中心管理的历史线程。切换不同线程后，LangGraph 会继续使用对应的
-            <code>thread_id</code> 恢复上下文。
-          </p>
+          <p class="eyebrow">Threads</p>
+          <h1>会话</h1>
         </header>
 
-        <button id="newThreadBtn" class="button button-secondary full-width" type="button">
-          新建会话
-        </button>
+        <div class="session-actions">
+          <button id="newThreadBtn" class="button button-secondary full-width" type="button">
+            新建会话
+          </button>
+        </div>
 
         <div id="sessionList" class="session-list"></div>
       </section>
@@ -29,37 +27,39 @@
 
     <section class="main-shell">
       <section class="panel workspace-panel">
-        <header class="panel-head">
+        <header class="panel-head workspace-head">
           <div>
-            <p class="eyebrow">Travel Assistant</p>
-            <h1>动态 Agent 对话台</h1>
-            <p class="panel-copy">
-              用户消息会立即进入聊天区。右侧时间线会动态显示
-              <code>analyze_query</code>、<code>select_agent</code>、<code>weather_agent</code>、
-              <code>geo_agent</code>、<code>travel_agent</code>、<code>tools</code>
-              等执行过程。
-            </p>
+            <p class="eyebrow">Multi-Agent Travel Desk</p>
+            <h1>旅行动线</h1>
+            <div class="header-tags">
+              <span class="tag">Chat</span>
+              <span class="tag">Timeline</span>
+              <span class="tag">SQLite Memory</span>
+            </div>
           </div>
           <div class="thread-card">
-            <span class="thread-label">Current thread_id</span>
+            <span class="thread-label">current thread_id</span>
             <code id="threadId">not-created</code>
           </div>
         </header>
 
         <section class="workspace-grid">
           <section class="conversation-panel">
+            <header class="section-head">
+              <p class="eyebrow">Conversation</p>
+              <h2>对话</h2>
+            </header>
             <div id="chatHistory" class="chat-history">
               <div class="empty-state">请选择左侧会话，或先创建一个新会话。</div>
             </div>
 
-            <label class="composer-label" for="messageInput">你的问题</label>
             <div class="composer-box">
               <textarea
                 id="messageInput"
                 placeholder="例如：帮我做一个去成都的旅游规划"
               ></textarea>
               <div class="composer-actions">
-                <p class="composer-hint">按 Enter 发送，Shift + Enter 换行。</p>
+                <p class="composer-hint">Enter 发送 · Shift + Enter 换行</p>
                 <button id="sendBtn" class="button button-primary" type="button">发送</button>
               </div>
             </div>
@@ -67,11 +67,8 @@
 
           <aside class="timeline-panel">
             <header class="timeline-head">
-              <p class="eyebrow">Live Graph</p>
-              <h2>Agent 时间线</h2>
-              <p class="panel-copy">
-                这里不会展示难看的原始 state，而是展示本轮真正发生的节点、路由和工具调用过程。
-              </p>
+              <p class="eyebrow">Execution</p>
+              <h2>时间线</h2>
             </header>
 
             <div id="processTimeline" class="timeline-list">

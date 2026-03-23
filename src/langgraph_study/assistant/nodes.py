@@ -13,6 +13,7 @@ from ..core.config import (
     TRAVEL_PLANNER_AGENT_SYSTEM_PROMPT,
     WEATHER_AGENT_SYSTEM_PROMPT,
 )
+from .memory import build_memory_context_messages
 from .state import QueryContext, SpecialistAgent, TravelAssistantState
 
 WEATHER_KEYWORDS = ("天气", "气温", "温度", "下雨", "下雪", "冷不冷", "热不热", "适合出门")
@@ -113,6 +114,7 @@ def create_specialist_node(bound_model, agent_name: SpecialistAgent):
             SystemMessage(content=specialist_prompt),
             SystemMessage(content="\n".join(routing_message)),
             SystemMessage(content=context_message),
+            *build_memory_context_messages(state),
             *state["messages"],
         ]
 
@@ -178,7 +180,7 @@ def analyze_query(state: TravelAssistantState) -> dict[str, QueryContext]:
     """Convert the latest user message into structured query context."""
 
     latest_user_text = extract_latest_user_text(state)
-    context = build_query_context(latest_user_text)
+    context = build_query_context(latest_user_text, state.get("query_context", {}))
     return {"query_context": context}
 
 
@@ -267,14 +269,25 @@ def extract_latest_user_text(state: TravelAssistantState) -> str:
     return ""
 
 
-def build_query_context(user_text: str) -> QueryContext:
+def build_query_context(user_text: str, previous_query_context: QueryContext | None = None) -> QueryContext:
     """Assemble a structured view of the user's latest request."""
 
     text = user_text.strip()
-    intent = detect_intent(text)
+    previous_context = previous_query_context or {}
+    explicit_intent = detect_intent(text)
+    intent = infer_intent(text, explicit_intent, previous_context)
     time_text = detect_time_text(text)
     location_text = extract_location_text(text, intent)
+    if not location_text and should_inherit_followup_intent(text, previous_context, intent):
+        location_text = extract_followup_location_text(text)
+    if not location_text:
+        location_text = extract_known_city_from_text(text)
     normalized_city = normalize_city(location_text)
+    if not normalized_city:
+        known_city = extract_known_city_from_text(text)
+        if known_city:
+            location_text = known_city
+            normalized_city = known_city
     clarification_required, clarification_reason = assess_clarification_need(
         intent=intent,
         location_text=location_text,
@@ -340,12 +353,70 @@ def detect_intent(text: str):
     return "general"
 
 
+def infer_intent(
+    text: str,
+    explicit_intent: str,
+    previous_query_context: QueryContext,
+):
+    """Infer omitted follow-up intent from the previous turn when needed."""
+
+    if explicit_intent != "general":
+        return explicit_intent
+    if not should_inherit_followup_intent(text, previous_query_context, explicit_intent):
+        return explicit_intent
+    return previous_query_context.get("intent", explicit_intent)
+
+
+def should_inherit_followup_intent(
+    text: str,
+    previous_query_context: QueryContext,
+    current_intent: str,
+) -> bool:
+    """Return whether the current short follow-up should inherit prior intent."""
+
+    if current_intent != "general":
+        return False
+    previous_intent = previous_query_context.get("intent", "general")
+    if previous_intent not in {"weather", "geocode", "travel", "place_search"}:
+        return False
+    if not text:
+        return False
+    if len(text) <= 8:
+        return True
+    followup_markers = ("呢", "那", "那边", "那儿", "然后", "还有", "这个呢", "那个呢")
+    return any(marker in text for marker in followup_markers)
+
+
 def detect_time_text(text: str) -> str:
     """Extract a simple time hint from the user text."""
 
     for token in TIME_PATTERNS:
         if token in text:
             return token
+    return ""
+
+
+def extract_followup_location_text(text: str) -> str:
+    """Extract a location from short elliptical follow-up questions such as '上海呢'."""
+
+    stripped = text.strip()
+    patterns = [
+        r"^(?:那|那边|那儿)?(?P<location>[\u4e00-\u9fa5A-Za-z0-9·]{2,20})(?:呢|怎么样|如何|咋样)?$",
+        r"^(?P<location>[\u4e00-\u9fa5A-Za-z0-9·]{2,20})(?:那边|那儿)?(?:呢|怎么样|如何|咋样)?$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, stripped)
+        if match:
+            return clean_location_text(match.group("location"))
+    return ""
+
+
+def extract_known_city_from_text(text: str) -> str:
+    """Prefer exact known city alias matches over regex spans."""
+
+    for alias in sorted(CITY_ALIASES, key=len, reverse=True):
+        if alias and alias in text:
+            return CITY_ALIASES[alias]
     return ""
 
 

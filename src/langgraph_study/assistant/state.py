@@ -21,9 +21,29 @@ class QueryContext(TypedDict, total=False):
     candidate_locations: list[str]
 
 
+class TaskMemory(TypedDict, total=False):
+    """Structured mid-term memory distilled from recent turns."""
+
+    current_goal: str
+    latest_intent: TravelIntent
+    latest_user_request: str
+    latest_assistant_reply: str
+    confirmed_city: str
+    recent_cities: list[str]
+    budget_text: str
+    trip_days: str
+    latest_time_text: str
+    last_active_agent: SpecialistAgent
+    user_preferences: list[str]
+
+
 class TravelAssistantState(MessagesState, total=False):
     """Message-based state for the travel assistant agent."""
 
     query_context: QueryContext
     active_agent: SpecialistAgent
     agent_selection_reason: str
+    conversation_summary: str
+    task_memory: TaskMemory
+    recalled_memories: list[str]
+    memory_scope: str

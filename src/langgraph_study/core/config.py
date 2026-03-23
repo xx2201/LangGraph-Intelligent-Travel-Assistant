@@ -1,10 +1,21 @@
 from __future__ import annotations
 
+import os
+
 DEFAULT_USER_INPUT = "帮我看看北京今天天气怎么样，适合出门吗？"
-DEFAULT_QWEN_MODEL = "qwen3-max"
+DEFAULT_QWEN_MODEL = "qwen-max"
 AMAP_MCP_MODULE = "langgraph_study.mcp.amap_server"
 CHECKPOINT_DB_PATH = ".langgraph_data/checkpoints.sqlite"
 THREAD_STORE_DB_PATH = ".langgraph_data/thread_store.sqlite"
+LONG_TERM_MEMORY_DB_PATH = ".langgraph_data/long_term_memory.sqlite"
+LONG_TERM_MEMORY_BACKEND = os.getenv("LONG_TERM_MEMORY_BACKEND", "sqlite")
+LONG_TERM_MEMORY_TOP_K = int(os.getenv("LONG_TERM_MEMORY_TOP_K", "3"))
+MEMORY_SHORT_TERM_WINDOW = int(os.getenv("MEMORY_SHORT_TERM_WINDOW", "8"))
+MEMORY_SUMMARY_TRIGGER_MESSAGES = int(os.getenv("MEMORY_SUMMARY_TRIGGER_MESSAGES", "12"))
+MEMORY_MAX_SUMMARY_CHARS = int(os.getenv("MEMORY_MAX_SUMMARY_CHARS", "1200"))
+MILVUS_URI = os.getenv("MILVUS_URI", "")
+MILVUS_TOKEN = os.getenv("MILVUS_TOKEN", "")
+MILVUS_COLLECTION_NAME = os.getenv("MILVUS_COLLECTION_NAME", "travel_assistant_memory")
 TRAVEL_AGENT_SYSTEM_PROMPT = """
 你是一个智能旅行助手，负责回答天气、地点、城市出行、景点、地址解析等问题。
 
